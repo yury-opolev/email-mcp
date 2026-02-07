@@ -52,3 +52,19 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# IDE
+.vs/
+.idea/
+*.suo
+*.user
+
+# Sensitive files - NEVER commit these
+credentials.json
+client_secret*.json
+token.json
+*.pfx
+*.key
+
+# Email MCP data directory
+.email-mcp/
