@@ -22,6 +22,14 @@ public interface IEmailAuthenticator
     Task<bool> AuthenticateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Clears the locally cached OAuth token (without contacting the provider to revoke it)
+    /// and re-runs the authentication flow. Use this when the session is stale but client
+    /// credentials are still valid.
+    /// Returns true if re-authentication succeeded.
+    /// </summary>
+    Task<bool> ReauthAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Revokes stored credentials.
     /// </summary>
     Task RevokeAsync(CancellationToken cancellationToken = default);
