@@ -14,12 +14,13 @@ A cross-platform MCP (Model Context Protocol) server that provides email integra
 
 | Tool | Description |
 |------|-------------|
-| `setup_gmail` | Configure Gmail credentials (Client ID + Secret) — encrypted locally |
-| `list_emails` | List recent emails with optional label filter |
-| `read_email` | Read a specific email by ID |
-| `search_emails` | Search emails using query syntax |
-| `list_labels` | List available email labels/folders |
-| `auth_status` | Check authentication status |
+| `setup_gmail` | Sets up Gmail credentials (Client ID + Secret) — values are encrypted and stored locally |
+| `auth_status` | Checks authentication status. If not configured, instructs to run `setup_gmail`. If configured but not authenticated, initiates OAuth flow. Supports `forceReauth` to start a fresh session. Run this first before using any other email tools |
+| `list_emails` | Lists recent emails from the inbox. Optionally filter by label ID (e.g., `INBOX`, `SENT`, `DRAFT`). Returns email ID, subject, sender, date, and snippet |
+| `read_email` | Reads a specific email by message ID. Returns full email content including body, headers, attachments info, and labels |
+| `search_emails` | Searches emails using Gmail search syntax (e.g., `from:john subject:meeting after:2025/01/01`). Supports individual field filters: from, to, subject, date range, and label |
+| `list_labels` | Lists all email labels/folders available in the account. Returns label IDs and names |
+| `revoke_auth` | Fully revokes the OAuth token with Google and deletes locally stored tokens. Does not remove stored client credentials |
 
 ## Quick Start
 
@@ -70,4 +71,4 @@ dotnet test
 
 ## License
 
-MIT
+BSD 3-Clause — see [LICENSE](LICENSE) for details.
