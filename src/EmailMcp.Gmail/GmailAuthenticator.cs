@@ -15,9 +15,15 @@ namespace EmailMcp.Gmail;
 /// </summary>
 public sealed class GmailAuthenticator : IEmailAuthenticator
 {
-    private const string TokenKey = "gmail-oauth-token";
+    private const string TokenKeyPrefix = "gmail-oauth-token";
     private const string ClientCredentialsKey = "gmail-client-credentials";
     private const string UserId = "user";
+
+    /// <summary>
+    /// The actual token store key used for the OAuth token.
+    /// Must match the key produced by <see cref="EncryptedDataStore.NormalizeKey"/> for <see cref="UserId"/>.
+    /// </summary>
+    private const string OAuthTokenKey = $"{TokenKeyPrefix}-{UserId}";
 
     private readonly ITokenStore _tokenStore;
     private readonly GmailOptions _options;
@@ -42,7 +48,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         if (_credential is not null)
             return true;
 
-        return await _tokenStore.ExistsAsync(TokenKey, cancellationToken);
+        return await _tokenStore.ExistsAsync(OAuthTokenKey, cancellationToken);
     }
 
     /// <summary>
@@ -98,8 +104,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         _credential = null;
 
         // Clear persisted OAuth token (without contacting Google to revoke it)
-        await _tokenStore.DeleteTokenAsync(TokenKey, cancellationToken);
-        await _tokenStore.DeleteTokenAsync($"{TokenKey}-{UserId}", cancellationToken);
+        await _tokenStore.DeleteTokenAsync(OAuthTokenKey, cancellationToken);
 
         _logger.LogInformation("Cleared cached Gmail OAuth token, re-authenticating");
 
@@ -124,8 +129,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
             }
         }
 
-        await _tokenStore.DeleteTokenAsync(TokenKey, cancellationToken);
-        await _tokenStore.DeleteTokenAsync($"{TokenKey}-{UserId}", cancellationToken);
+        await _tokenStore.DeleteTokenAsync(OAuthTokenKey, cancellationToken);
         _logger.LogInformation("Gmail credentials revoked and local tokens deleted");
     }
 
@@ -214,9 +218,9 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
 
         public async Task ClearAsync()
         {
-            await _tokenStore.DeleteTokenAsync(TokenKey);
+            await _tokenStore.DeleteTokenAsync(OAuthTokenKey);
         }
 
-        private static string NormalizeKey(string key) => $"{TokenKey}-{key}";
+        private static string NormalizeKey(string key) => $"{TokenKeyPrefix}-{key}";
     }
 }
