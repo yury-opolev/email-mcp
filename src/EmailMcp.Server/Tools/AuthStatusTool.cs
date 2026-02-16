@@ -53,7 +53,16 @@ public static class AuthStatusTool
 
         if (forceReauth)
         {
-            await authenticator.RevokeAsync(cancellationToken);
+            var success = await authenticator.ReauthAsync(cancellationToken);
+            return JsonSerialize(new
+            {
+                Provider = authenticator.ProviderName,
+                Status = success ? "authenticated" : "failed",
+                Message = success
+                    ? "Successfully re-authenticated. You can now use email tools."
+                    : "Re-authentication failed. Your credentials are still configured. " +
+                      "Run 'auth_status' again to retry, or use 'setup_gmail' to reconfigure credentials.",
+            });
         }
 
         var isAuthenticated = await authenticator.IsAuthenticatedAsync(cancellationToken);
@@ -67,7 +76,8 @@ public static class AuthStatusTool
                 Status = success ? "authenticated" : "failed",
                 Message = success
                     ? "Successfully authenticated. You can now use email tools."
-                    : "Authentication failed. Please check your credentials and try again.",
+                    : "Authentication failed. Your credentials are still configured. " +
+                      "Run 'auth_status' again to retry, or use 'auth_status' with forceReauth to start a fresh session.",
             });
         }
 

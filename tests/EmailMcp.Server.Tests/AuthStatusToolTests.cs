@@ -51,14 +51,69 @@ public class AuthStatusToolTests
     }
 
     [Fact]
-    public async Task AuthStatus_ForceReauth_RevokesFirst()
+    public async Task AuthStatus_WhenAuthFails_MessageIndicatesCredentialsStillConfigured()
     {
         _authMock.Setup(a => a.IsAuthenticatedAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        _authMock.Setup(a => a.AuthenticateAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        _authMock.Setup(a => a.AuthenticateAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
+
+        var result = await AuthStatusTool.AuthStatus(_authMock.Object);
+        var doc = JsonDocument.Parse(result);
+
+        var message = doc.RootElement.GetProperty("Message").GetString();
+        message.Should().Contain("credentials are still configured");
+        message.Should().Contain("forceReauth");
+    }
+
+    [Fact]
+    public async Task AuthStatus_ForceReauth_CallsReauthAsync()
+    {
+        _authMock.Setup(a => a.ReauthAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
+
+        var result = await AuthStatusTool.AuthStatus(_authMock.Object, forceReauth: true);
+        var doc = JsonDocument.Parse(result);
+
+        doc.RootElement.GetProperty("Status").GetString().Should().Be("authenticated");
+        _authMock.Verify(a => a.ReauthAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _authMock.Verify(a => a.RevokeAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AuthStatus_ForceReauth_DoesNotCallRevokeAsync()
+    {
+        _authMock.Setup(a => a.ReauthAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
         _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
 
         await AuthStatusTool.AuthStatus(_authMock.Object, forceReauth: true);
 
-        _authMock.Verify(a => a.RevokeAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _authMock.Verify(a => a.RevokeAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AuthStatus_ForceReauth_WhenFails_ReturnsFailedWithRetryGuidance()
+    {
+        _authMock.Setup(a => a.ReauthAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
+
+        var result = await AuthStatusTool.AuthStatus(_authMock.Object, forceReauth: true);
+        var doc = JsonDocument.Parse(result);
+
+        doc.RootElement.GetProperty("Status").GetString().Should().Be("failed");
+        var message = doc.RootElement.GetProperty("Message").GetString();
+        message.Should().Contain("credentials are still configured");
+        message.Should().Contain("setup_gmail");
+    }
+
+    [Fact]
+    public async Task AuthStatus_ForceReauth_ReturnsEarlyWithoutCheckingIsAuthenticated()
+    {
+        _authMock.Setup(a => a.ReauthAsync(It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
+
+        await AuthStatusTool.AuthStatus(_authMock.Object, forceReauth: true);
+
+        _authMock.Verify(a => a.IsAuthenticatedAsync(It.IsAny<CancellationToken>()), Times.Never);
+        _authMock.Verify(a => a.AuthenticateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }
