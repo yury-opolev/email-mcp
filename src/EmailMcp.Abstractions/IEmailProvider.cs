@@ -37,4 +37,12 @@ public interface IEmailProvider
     /// </summary>
     Task<IReadOnlyList<EmailLabel>> ListLabelsAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends an email from the authenticated account. Returns the provider-assigned message ID
+    /// of the sent message.
+    /// </summary>
+    Task<string> SendEmailAsync(
+        SendEmailRequest request,
+        CancellationToken cancellationToken = default);
 }

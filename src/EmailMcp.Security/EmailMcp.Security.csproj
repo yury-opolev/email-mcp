@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.7" />
   </ItemGroup>
 
   <PropertyGroup>

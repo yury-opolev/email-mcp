@@ -20,7 +20,17 @@ A cross-platform MCP (Model Context Protocol) server that provides email integra
 | `read_email` | Reads a specific email by message ID. Returns full email content including body, headers, attachments info, and labels |
 | `search_emails` | Searches emails using Gmail search syntax (e.g., `from:john subject:meeting after:2025/01/01`). Supports individual field filters: from, to, subject, date range, and label |
 | `list_labels` | Lists all email labels/folders available in the account. Returns label IDs and names |
+| `send_email` | Sends an email from the authenticated account. Supports plain text, HTML, or both (multipart/alternative). Accepts comma-separated `to`/`cc`/`bcc` lists, with optional display names (`"Name <addr@example.com>"`). Requires the GmailSend OAuth scope — see Scopes section below |
 | `revoke_auth` | Fully revokes the OAuth token with Google and deletes locally stored tokens. Does not remove stored client credentials |
+
+## Scopes
+
+The server requests two Gmail OAuth scopes:
+
+- `gmail.readonly` — required by `list_emails`, `read_email`, `search_emails`, `list_labels`
+- `gmail.send` — required by `send_email`
+
+If you previously authenticated against an older build that only requested `gmail.readonly`, you must run `revoke_auth` and then `auth_status` to re-grant consent with the broader scope before `send_email` will succeed.
 
 ## Quick Start
 

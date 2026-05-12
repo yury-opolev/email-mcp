@@ -167,6 +167,8 @@ Once configured, the following tools are available to your AI assistant:
 | `read_email` | Read a specific email by ID (full body content) |
 | `search_emails` | Search emails using Gmail query syntax |
 | `list_labels` | List all available labels/folders |
+| `send_email` | Send an email (plain text, HTML, or both) from the authenticated account |
+| `revoke_auth` | Fully revoke the OAuth token and delete local tokens |
 
 ### Usage Examples
 
@@ -196,7 +198,14 @@ OAuth tokens are encrypted at rest using platform-native mechanisms:
 
 ### Permissions
 
-The server requests **read-only** Gmail access by default (`GmailService.Scope.GmailReadonly`). It cannot send, delete, or modify emails.
+The server requests two Gmail scopes by default:
+
+- `gmail.readonly` — required by `list_emails`, `read_email`, `search_emails`, `list_labels`
+- `gmail.send` — required by `send_email`
+
+It still cannot delete or modify existing messages, manage labels, or change account settings.
+
+If you previously authenticated against an older build that only requested `gmail.readonly`, you must run `revoke_auth` and then `auth_status` to re-grant consent with the broader scope before `send_email` will succeed. The tool will return an HTTP 403 with a clear message if the stored token lacks the send scope.
 
 ### Revoking Access
 

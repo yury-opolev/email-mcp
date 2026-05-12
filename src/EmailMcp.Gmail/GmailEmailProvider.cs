@@ -1,3 +1,4 @@
+using System.Text;
 using EmailMcp.Abstractions;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Services;
@@ -115,6 +116,39 @@ public sealed class GmailEmailProvider : IEmailProvider
 
         _logger.LogDebug("Listed {Count} labels", labels.Count);
         return labels;
+    }
+
+    public async Task<string> SendEmailAsync(
+        SendEmailRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var service = await GetServiceAsync(cancellationToken);
+
+        var mime = MimeBuilder.Build(request);
+        var raw = Base64UrlEncode(mime);
+
+        var message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw };
+        var sent = await service.Users.Messages.Send(message, "me").ExecuteAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Sent email; messageId={MessageId}, to={ToCount}, cc={CcCount}, bcc={BccCount}",
+            sent.Id,
+            request.To.Count,
+            request.Cc.Count,
+            request.Bcc.Count);
+
+        return sent.Id;
+    }
+
+    private static string Base64UrlEncode(string mime)
+    {
+        var bytes = Encoding.UTF8.GetBytes(mime);
+        return Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
     }
 
     private static string BuildGmailQuery(EmailSearchQuery query)

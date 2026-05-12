@@ -14,9 +14,9 @@ public sealed class GmailOptions
     public string? CredentialsPath { get; set; }
 
     /// <summary>
-    /// OAuth scopes to request. Defaults to read-only access.
+    /// OAuth scopes to request. Defaults to read + send access.
     /// </summary>
-    public string[] Scopes { get; set; } = [GmailService.Scope.GmailReadonly];
+    public string[] Scopes { get; set; } = [GmailService.Scope.GmailReadonly, GmailService.Scope.GmailSend];
 
     /// <summary>
     /// Application name sent to Google API.
