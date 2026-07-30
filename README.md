@@ -20,7 +20,29 @@ A cross-platform MCP (Model Context Protocol) server that provides email integra
 | `read_email` | Reads a specific email by message ID. Returns full email content including body, headers, attachments info, and labels |
 | `search_emails` | Searches emails using Gmail search syntax (e.g., `from:john subject:meeting after:2025/01/01`). Supports individual field filters: from, to, subject, date range, and label |
 | `list_labels` | Lists all email labels/folders available in the account. Returns label IDs and names |
-| `send_email` | Sends an email from the authenticated account. Supports plain text, HTML, or both (multipart/alternative). Accepts comma-separated `to`/`cc`/`bcc` lists, with optional display names (`"Name <addr@example.com>"`). Requires the GmailSend OAuth scope — see Scopes section below |
+| `send_email` | Sends an email from the authenticated account. Supports plain text, HTML, or both (multipart/alternative), plus file attachments. Accepts comma-separated `to`/`cc`/`bcc` lists, with optional display names (`"Name <addr@example.com>"`). Requires the GmailSend OAuth scope — see Scopes section below |
+
+### Attachments
+
+`send_email` takes an optional `attachments` parameter: a comma-separated list of
+**local file paths** on the machine running the server.
+
+```
+attachments: "C:\reports\q3.pdf, C:\images\chart.png"
+```
+
+Paths rather than inline content, because the server runs alongside the client and
+pushing megabytes of base64 through the MCP protocol would be wasteful.
+
+The MIME type is inferred from the file extension, falling back to
+`application/octet-stream`. With attachments present the message is built as
+`multipart/mixed`, with the body as the first part — nested as
+`multipart/alternative` when both `body` and `bodyHtml` are supplied.
+
+**Gmail rejects messages over 25 MB**, so the combined size of the attachments is
+checked up front and the tool returns a clear error rather than letting the API fail
+after the upload. Note this checks the raw bytes; base64 adds roughly 33%, so the
+practical ceiling is lower. For anything larger, share a link instead.
 | `revoke_auth` | Fully revokes the OAuth token with Google and deletes locally stored tokens. Does not remove stored client credentials |
 
 ## Scopes

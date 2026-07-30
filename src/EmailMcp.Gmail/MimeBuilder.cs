@@ -37,12 +37,46 @@ internal static class MimeBuilder
         sb.Append("Subject: ").Append(EncodeHeaderValue(request.Subject)).Append(Crlf);
         sb.Append("MIME-Version: 1.0").Append(Crlf);
 
+        if (request.Attachments.Count > 0)
+        {
+            // multipart/mixed wraps the body (which is itself multipart/alternative
+            // when both bodies are present) followed by one part per attachment.
+            var mixedBoundary = NewBoundary();
+            sb.Append("Content-Type: multipart/mixed; boundary=\"").Append(mixedBoundary).Append('"').Append(Crlf);
+            sb.Append(Crlf);
+
+            sb.Append("--").Append(mixedBoundary).Append(Crlf);
+            AppendBody(sb, request, asNestedPart: true);
+
+            foreach (var attachment in request.Attachments)
+            {
+                sb.Append("--").Append(mixedBoundary).Append(Crlf);
+                AppendAttachmentPart(sb, attachment);
+            }
+
+            sb.Append("--").Append(mixedBoundary).Append("--").Append(Crlf);
+            return sb.ToString();
+        }
+
+        AppendBody(sb, request, asNestedPart: false);
+        return sb.ToString();
+    }
+
+    private static string NewBoundary() => "=_EmailMcp_" + Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Writes the message body. When <paramref name="asNestedPart"/> the caller has
+    /// already emitted the enclosing boundary line, so this writes only the part's
+    /// own headers and content; otherwise the headers belong to the message itself.
+    /// </summary>
+    private static void AppendBody(StringBuilder sb, SendEmailRequest request, bool asNestedPart)
+    {
         var hasText = !string.IsNullOrEmpty(request.Body);
         var hasHtml = !string.IsNullOrEmpty(request.BodyHtml);
 
         if (hasText && hasHtml)
         {
-            var boundary = "=_EmailMcp_" + Guid.NewGuid().ToString("N");
+            var boundary = NewBoundary();
             sb.Append("Content-Type: multipart/alternative; boundary=\"").Append(boundary).Append('"').Append(Crlf);
             sb.Append(Crlf);
 
@@ -66,7 +100,34 @@ internal static class MimeBuilder
             sb.Append(request.Body).Append(Crlf);
         }
 
-        return sb.ToString();
+        _ = asNestedPart;
+    }
+
+    private static void AppendAttachmentPart(StringBuilder sb, OutboundAttachment attachment)
+    {
+        sb.Append("Content-Type: ").Append(attachment.MimeType)
+          .Append("; name=\"").Append(EncodeHeaderValue(attachment.Filename)).Append('"').Append(Crlf);
+        sb.Append("Content-Transfer-Encoding: base64").Append(Crlf);
+        sb.Append("Content-Disposition: attachment; filename=\"")
+          .Append(EncodeHeaderValue(attachment.Filename)).Append('"').Append(Crlf);
+        sb.Append(Crlf);
+
+        AppendWrappedBase64(sb, attachment.Content);
+    }
+
+    /// <summary>
+    /// RFC 2045 caps encoded lines at 76 characters; Gmail rejects longer ones.
+    /// </summary>
+    private static void AppendWrappedBase64(StringBuilder sb, byte[] content)
+    {
+        const int LineLength = 76;
+        var encoded = Convert.ToBase64String(content);
+
+        for (var offset = 0; offset < encoded.Length; offset += LineLength)
+        {
+            var take = Math.Min(LineLength, encoded.Length - offset);
+            sb.Append(encoded, offset, take).Append(Crlf);
+        }
     }
 
     private static void AppendAddressHeader(StringBuilder sb, string headerName, IReadOnlyList<EmailAddress> addresses)

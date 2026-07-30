@@ -15,7 +15,9 @@ public static class SendEmailTool
         "the broader scope before send_email will work. " +
         "Recipient fields accept a comma-separated list. Display names are supported using the " +
         "form 'Display Name <addr@example.com>'. Provide either body, bodyHtml, or both — " +
-        "supplying both produces a multipart/alternative message.")]
+        "supplying both produces a multipart/alternative message. " +
+        "Attachments are given as local file paths on the machine running this server; " +
+        "the total must stay under Gmail's 25 MB limit.")]
     public static async Task<string> SendEmail(
         IEmailProvider emailProvider,
         [Description("Comma-separated list of recipient email addresses (e.g. 'alice@example.com, Bob <bob@example.com>').")] string to,
@@ -24,6 +26,7 @@ public static class SendEmailTool
         [Description("HTML body. Provide either body, bodyHtml, or both.")] string? bodyHtml = null,
         [Description("Comma-separated list of Cc recipients (optional).")] string? cc = null,
         [Description("Comma-separated list of Bcc recipients (optional).")] string? bcc = null,
+        [Description("Comma-separated list of local file paths to attach (optional), e.g. 'C:\\\\reports\\\\q3.pdf, C:\\\\img\\\\chart.png'. Total size must be under 25 MB.")] string? attachments = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(to))
@@ -41,6 +44,12 @@ public static class SendEmailTool
             return Error("At least one of 'body' or 'bodyHtml' must be supplied.");
         }
 
+        var loaded = AttachmentLoader.Load(attachments);
+        if (loaded.Error is not null)
+        {
+            return Error(loaded.Error);
+        }
+
         var request = new SendEmailRequest
         {
             To = ParseAddresses(to),
@@ -49,6 +58,7 @@ public static class SendEmailTool
             Subject = subject,
             Body = body,
             BodyHtml = bodyHtml,
+            Attachments = loaded.Attachments,
         };
 
         if (request.To.Count == 0)
@@ -68,6 +78,7 @@ public static class SendEmailTool
                 Cc = request.Cc.Select(a => a.ToString()),
                 Bcc = request.Bcc.Select(a => a.ToString()),
                 request.Subject,
+                Attachments = request.Attachments.Select(a => new { a.Filename, a.MimeType, Bytes = a.Content.Length }),
             });
         }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden)
