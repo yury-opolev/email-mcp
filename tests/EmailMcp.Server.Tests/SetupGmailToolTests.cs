@@ -6,80 +6,93 @@ using Moq;
 
 namespace EmailMcp.Server.Tests;
 
+/// <summary>
+/// setup_gmail now delegates to the account registry rather than writing the token store itself.
+/// Client ID and secret validation moved with it, and is covered by the registry's own tests.
+/// </summary>
 public class SetupGmailToolTests
 {
-    private readonly Mock<ITokenStore> _tokenStoreMock = new();
+    private const string ValidClientId = "123456789-abc.apps.googleusercontent.com";
+    private const string ValidSecret = "GOCSPX-secret123";
+
+    private readonly Mock<IAccountRegistry> _registryMock = new();
 
     [Fact]
-    public async Task SetupGmail_ValidCredentials_SavesEncrypted()
+    public async Task SetupGmail_WithNoAccounts_CreatesTheDefaultAccount()
     {
-        var clientId = "123456789-abc.apps.googleusercontent.com";
-        var clientSecret = "GOCSPX-secret123";
+        WithAccounts();
 
-        var result = await SetupGmailTool.SetupGmail(_tokenStoreMock.Object, clientId, clientSecret);
+        var result = await SetupGmailTool.SetupGmail(_registryMock.Object, ValidClientId, ValidSecret);
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetProperty("Success").GetBoolean().Should().BeTrue();
+        doc.RootElement.GetProperty("Account").GetString().Should().Be("default");
 
-        _tokenStoreMock.Verify(s => s.SaveTokenAsync(
-            "gmail-client-credentials",
-            It.Is<string>(json => json.Contains(clientId) && json.Contains(clientSecret)),
-            It.IsAny<CancellationToken>()), Times.Once);
+        _registryMock.Verify(
+            r => r.AddAccountAsync("default", ValidClientId, ValidSecret, true, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
-    public async Task SetupGmail_EmptyClientId_ReturnsError()
+    public async Task SetupGmail_WithOneAccount_ReplacesItsCredentials()
     {
-        var result = await SetupGmailTool.SetupGmail(_tokenStoreMock.Object, "", "secret");
+        WithAccounts("studio");
+
+        var result = await SetupGmailTool.SetupGmail(_registryMock.Object, ValidClientId, ValidSecret);
+        var doc = JsonDocument.Parse(result);
+
+        doc.RootElement.GetProperty("Success").GetBoolean().Should().BeTrue();
+        doc.RootElement.GetProperty("Account").GetString().Should().Be("studio");
+
+        _registryMock.Verify(
+            r => r.UpdateCredentialsAsync("studio", ValidClientId, ValidSecret, It.IsAny<CancellationToken>()),
+            Times.Once);
+        _registryMock.Verify(
+            r => r.AddAccountAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task SetupGmail_WithSeveralAccounts_RefusesAndNamesThem()
+    {
+        WithAccounts("personal", "studio");
+
+        var result = await SetupGmailTool.SetupGmail(_registryMock.Object, ValidClientId, ValidSecret);
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetProperty("Success").GetBoolean().Should().BeFalse();
-        doc.RootElement.GetProperty("Message").GetString().Should().Contain("Client ID");
+        var error = doc.RootElement.GetProperty("Error").GetString();
+        error.Should().Contain("personal").And.Contain("studio");
+        error.Should().Contain("add_account");
     }
 
     [Fact]
-    public async Task SetupGmail_EmptyClientSecret_ReturnsError()
+    public async Task SetupGmail_WhenRegistryRejectsCredentials_ReturnsTheReason()
     {
-        var result = await SetupGmailTool.SetupGmail(
-            _tokenStoreMock.Object,
-            "123-abc.apps.googleusercontent.com",
-            "");
+        WithAccounts();
+        _registryMock
+            .Setup(r => r.AddAccountAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new AccountException("Client ID doesn't look right."));
+
+        var result = await SetupGmailTool.SetupGmail(_registryMock.Object, "not-a-client-id", ValidSecret);
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetProperty("Success").GetBoolean().Should().BeFalse();
-        doc.RootElement.GetProperty("Message").GetString().Should().Contain("Client Secret");
+        doc.RootElement.GetProperty("Error").GetString().Should().Contain("Client ID");
     }
 
-    [Fact]
-    public async Task SetupGmail_InvalidClientIdFormat_ReturnsError()
+    private void WithAccounts(params string[] aliases)
     {
-        var result = await SetupGmailTool.SetupGmail(_tokenStoreMock.Object, "not-a-valid-id", "secret");
-        var doc = JsonDocument.Parse(result);
+        var accounts = aliases
+            .Select(alias => new EmailAccount(alias, EmailAddress: null, DateTimeOffset.UtcNow))
+            .ToList();
 
-        doc.RootElement.GetProperty("Success").GetBoolean().Should().BeFalse();
-        doc.RootElement.GetProperty("Message").GetString().Should().Contain("doesn't look right");
-    }
-
-    [Fact]
-    public async Task SetupGmail_SavedJson_HasCorrectStructure()
-    {
-        string? savedJson = null;
-        _tokenStoreMock.Setup(s => s.SaveTokenAsync("gmail-client-credentials", It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Callback<string, string, CancellationToken>((_, json, _) => savedJson = json)
-            .Returns(Task.CompletedTask);
-
-        await SetupGmailTool.SetupGmail(
-            _tokenStoreMock.Object,
-            "123-abc.apps.googleusercontent.com",
-            "my-secret");
-
-        savedJson.Should().NotBeNull();
-        var doc = JsonDocument.Parse(savedJson!);
-        doc.RootElement.GetProperty("installed").GetProperty("client_id").GetString()
-            .Should().Be("123-abc.apps.googleusercontent.com");
-        doc.RootElement.GetProperty("installed").GetProperty("client_secret").GetString()
-            .Should().Be("my-secret");
-        doc.RootElement.GetProperty("installed").GetProperty("auth_uri").GetString()
-            .Should().Contain("google");
+        _registryMock
+            .Setup(r => r.ListAccountsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(accounts);
     }
 }

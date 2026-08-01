@@ -15,7 +15,7 @@ public class RevokeAuthToolTests
     {
         _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
 
-        await RevokeAuthTool.RevokeAuth(_authMock.Object);
+        await RevokeAuthTool.RevokeAuth(TestRegistry.For(_authMock.Object));
 
         _authMock.Verify(a => a.RevokeAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -25,7 +25,7 @@ public class RevokeAuthToolTests
     {
         _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
 
-        var result = await RevokeAuthTool.RevokeAuth(_authMock.Object);
+        var result = await RevokeAuthTool.RevokeAuth(TestRegistry.For(_authMock.Object));
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetProperty("Success").GetBoolean().Should().BeTrue();
@@ -37,7 +37,7 @@ public class RevokeAuthToolTests
     {
         _authMock.SetupGet(a => a.ProviderName).Returns("Gmail");
 
-        var result = await RevokeAuthTool.RevokeAuth(_authMock.Object);
+        var result = await RevokeAuthTool.RevokeAuth(TestRegistry.For(_authMock.Object));
         var doc = JsonDocument.Parse(result);
 
         var message = doc.RootElement.GetProperty("Message").GetString();

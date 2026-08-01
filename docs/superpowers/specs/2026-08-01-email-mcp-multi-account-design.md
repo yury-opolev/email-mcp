@@ -155,7 +155,15 @@ All errors keep the existing shape: `{ "Success": false, "Error": "..." }`.
 
 ## Testing
 
-Existing tests must pass unchanged; they are the regression net for single-account behaviour.
+**Correction to an earlier claim in this spec:** existing tests do *not* all pass unchanged.
+Tool tests call tools directly, e.g. `AuthStatusTool.AuthStatus(authMock.Object)`, so changing a
+tool's first parameter from `IEmailAuthenticator` to `IAccountRegistry` necessarily breaks them.
+They are updated mechanically via a `TestRegistry` helper that returns a registry resolving to a
+single fixed account, which keeps the assertions themselves untouched. `SetupGmailToolTests` is
+rewritten rather than patched, because `setup_gmail` no longer writes the token store itself and
+its credential validation moved into the registry.
+
+Abstractions, Gmail and Security tests are unaffected.
 
 New tests:
 - Alias validation: accepted and rejected forms, including leading/trailing hyphen and the

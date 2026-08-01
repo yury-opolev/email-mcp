@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using EmailMcp.Abstractions;
 using ModelContextProtocol.Server;
 
@@ -9,26 +8,34 @@ namespace EmailMcp.Server.Tools;
 public static class RevokeAuthTool
 {
     [McpServerTool(Name = "revoke_auth"), Description(
-        "Fully revokes the OAuth token with Google and deletes all locally stored tokens. " +
-        "Use this when you want to completely disconnect the app from the Google account. " +
-        "After revoking, you will need to run 'auth_status' to re-authenticate. " +
-        "This does NOT delete the stored client credentials (Client ID / Secret) — " +
-        "use 'setup_gmail' if you need to change those.")]
+        "Fully revokes the OAuth token with Google and deletes all locally stored tokens for one " +
+        "account. Use this when you want to completely disconnect the app from that Google account. " +
+        "After revoking, run 'auth_status' to re-authenticate. " +
+        "This does NOT delete the stored client credentials (Client ID / Secret) - " +
+        "use 'update_account_credentials' to change those, or 'remove_account' to delete the account.")]
     public static async Task<string> RevokeAuth(
-        IEmailAuthenticator authenticator,
+        IAccountRegistry accounts,
+        [Description(AccountParameter.Description)] string? account = null,
         CancellationToken cancellationToken = default)
     {
-        await authenticator.RevokeAsync(cancellationToken);
-
-        return JsonSerialize(new
+        try
         {
-            Provider = authenticator.ProviderName,
-            Success = true,
-            Message = "OAuth token revoked and local tokens deleted. " +
-                "Run 'auth_status' to re-authenticate when ready.",
-        });
-    }
+            var alias = await accounts.ResolveAliasAsync(account, cancellationToken);
+            var authenticator = await accounts.GetAuthenticatorAsync(alias, cancellationToken);
+            await authenticator.RevokeAsync(cancellationToken);
 
-    private static string JsonSerialize(object value) =>
-        JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+            return ToolResponse.Json(new
+            {
+                Provider = authenticator.ProviderName,
+                Account = alias,
+                Success = true,
+                Message = $"OAuth token revoked and local tokens deleted for account '{alias}'. " +
+                    "Run 'auth_status' to re-authenticate when ready.",
+            });
+        }
+        catch (AccountException ex)
+        {
+            return ToolResponse.Error(ex.Message);
+        }
+    }
 }

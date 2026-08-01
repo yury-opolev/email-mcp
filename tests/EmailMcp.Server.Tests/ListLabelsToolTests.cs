@@ -23,7 +23,7 @@ public class ListLabelsToolTests
         _providerMock.Setup(p => p.ListLabelsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(labels);
 
-        var result = await ListLabelsTool.ListLabels(_providerMock.Object);
+        var result = await ListLabelsTool.ListLabels(TestRegistry.For(_providerMock.Object));
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetArrayLength().Should().Be(3);

@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using EmailMcp.Abstractions;
 using ModelContextProtocol.Server;
 
@@ -9,58 +8,72 @@ namespace EmailMcp.Server.Tools;
 public static class SetupGmailTool
 {
     [McpServerTool(Name = "setup_gmail"), Description(
-        "Sets up Gmail credentials for the email MCP server. " +
+        "Sets up Gmail credentials for a single-account setup. " +
+        "With no accounts configured this creates one called 'default'; with exactly one account " +
+        "configured it replaces that account's credentials. If several accounts exist, use " +
+        "'add_account' or 'update_account_credentials' instead so it is clear which one you mean. " +
         "Requires a Google OAuth Client ID and Client Secret from Google Cloud Console. " +
-        "These values are encrypted and stored locally — they never leave your machine. " +
+        "These values are encrypted and stored locally - they never leave your machine. " +
         "How to get these values: " +
         "1) Go to https://console.cloud.google.com " +
         "2) Create or select a project " +
-        "3) Enable the Gmail API (APIs & Services → Library → search 'Gmail API' → Enable) " +
-        "4) Configure OAuth consent screen (APIs & Services → OAuth consent screen → External → add your email as test user) " +
-        "5) Create credentials (APIs & Services → Credentials → Create Credentials → OAuth client ID → Desktop app) " +
+        "3) Enable the Gmail API (APIs & Services -> Library -> search 'Gmail API' -> Enable) " +
+        "4) Configure OAuth consent screen (APIs & Services -> OAuth consent screen -> External -> add your email as test user) " +
+        "5) Create credentials (APIs & Services -> Credentials -> Create Credentials -> OAuth client ID -> Desktop app) " +
         "6) Copy the Client ID and Client Secret from the popup.")]
     public static async Task<string> SetupGmail(
-        ITokenStore tokenStore,
+        IAccountRegistry accounts,
         [Description("Google OAuth Client ID (looks like: 123456789-abc.apps.googleusercontent.com)")] string clientId,
         [Description("Google OAuth Client Secret")] string clientSecret,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(clientId))
-            return JsonResult(false, "Client ID is required.");
-
-        if (string.IsNullOrWhiteSpace(clientSecret))
-            return JsonResult(false, "Client Secret is required.");
-
-        if (!clientId.Contains(".apps.googleusercontent.com"))
-            return JsonResult(false,
-                "Client ID doesn't look right. It should end with '.apps.googleusercontent.com'. " +
-                "Make sure you're using the OAuth Client ID, not the project ID.");
-
-        var credentials = new
+        try
         {
-            installed = new
+            var existing = await accounts.ListAccountsAsync(cancellationToken);
+
+            switch (existing.Count)
             {
-                client_id = clientId.Trim(),
-                client_secret = clientSecret.Trim(),
-                auth_uri = "https://accounts.google.com/o/oauth2/auth",
-                token_uri = "https://oauth2.googleapis.com/token",
-                redirect_uris = new[] { "http://localhost" },
+                case 0:
+                    await accounts.AddAccountAsync(
+                        AccountKeys.LegacyAlias,
+                        clientId,
+                        clientSecret,
+                        setDefault: true,
+                        cancellationToken);
+
+                    return ToolResponse.Json(new
+                    {
+                        Success = true,
+                        Account = AccountKeys.LegacyAlias,
+                        Message = "Gmail credentials saved and encrypted for the 'default' account. " +
+                            "Now use the 'auth_status' tool to authenticate with your Google account. " +
+                            "This will open a browser window for you to sign in.",
+                    });
+
+                case 1:
+                    var alias = existing[0].Alias;
+                    await accounts.UpdateCredentialsAsync(alias, clientId, clientSecret, cancellationToken);
+
+                    return ToolResponse.Json(new
+                    {
+                        Success = true,
+                        Account = alias,
+                        Message = $"Gmail credentials replaced for account '{alias}'. " +
+                            "The previously stored sign-in may no longer be valid; " +
+                            "run 'auth_status' to re-authenticate.",
+                    });
+
+                default:
+                    return ToolResponse.Error(
+                        "Several accounts are configured, so 'setup_gmail' cannot tell which one you mean. " +
+                        "Use 'add_account' to create a new one, or 'update_account_credentials' to change " +
+                        "an existing one. Known accounts: " +
+                        string.Join(", ", existing.Select(a => a.Alias)) + ".");
             }
-        };
-
-        var json = JsonSerializer.Serialize(credentials);
-        await tokenStore.SaveTokenAsync("gmail-client-credentials", json, cancellationToken);
-
-        return JsonResult(true,
-            "Gmail credentials saved and encrypted. " +
-            "Now use the 'auth_status' tool to authenticate with your Google account. " +
-            "This will open a browser window for you to sign in.");
-    }
-
-    private static string JsonResult(bool success, string message) =>
-        JsonSerializer.Serialize(new
+        }
+        catch (AccountException ex)
         {
-            Success = success,
-            Message = message,
-        }, new JsonSerializerOptions { WriteIndented = true });
+            return ToolResponse.Error(ex.Message);
+        }
+    }
 }

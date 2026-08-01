@@ -31,7 +31,7 @@ public class ListEmailsToolTests
         _providerMock.Setup(p => p.ListEmailsAsync(20, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(emails);
 
-        var result = await ListEmailsTool.ListEmails(_providerMock.Object);
+        var result = await ListEmailsTool.ListEmails(TestRegistry.For(_providerMock.Object));
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetArrayLength().Should().Be(1);
@@ -45,7 +45,7 @@ public class ListEmailsToolTests
         _providerMock.Setup(p => p.ListEmailsAsync(50, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<EmailMessage>());
 
-        await ListEmailsTool.ListEmails(_providerMock.Object, maxResults: 100);
+        await ListEmailsTool.ListEmails(TestRegistry.For(_providerMock.Object), maxResults: 100);
 
         _providerMock.Verify(p => p.ListEmailsAsync(50, null, It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -56,7 +56,7 @@ public class ListEmailsToolTests
         _providerMock.Setup(p => p.ListEmailsAsync(20, "SENT", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<EmailMessage>());
 
-        await ListEmailsTool.ListEmails(_providerMock.Object, labelId: "SENT");
+        await ListEmailsTool.ListEmails(TestRegistry.For(_providerMock.Object), labelId: "SENT");
 
         _providerMock.Verify(p => p.ListEmailsAsync(20, "SENT", It.IsAny<CancellationToken>()), Times.Once);
     }

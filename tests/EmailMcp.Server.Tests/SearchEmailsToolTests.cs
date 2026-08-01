@@ -16,7 +16,7 @@ public class SearchEmailsToolTests
         _providerMock.Setup(p => p.SearchEmailsAsync(It.IsAny<EmailSearchQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<EmailMessage>());
 
-        await SearchEmailsTool.SearchEmails(_providerMock.Object, query: "from:alice is:unread");
+        await SearchEmailsTool.SearchEmails(TestRegistry.For(_providerMock.Object), query: "from:alice is:unread");
 
         _providerMock.Verify(p => p.SearchEmailsAsync(
             It.Is<EmailSearchQuery>(q => q.Query == "from:alice is:unread"),
@@ -30,7 +30,7 @@ public class SearchEmailsToolTests
             .ReturnsAsync(new List<EmailMessage>());
 
         await SearchEmailsTool.SearchEmails(
-            _providerMock.Object,
+            TestRegistry.For(_providerMock.Object),
             from: "alice@test.com",
             subject: "report",
             maxResults: 5);
@@ -62,7 +62,7 @@ public class SearchEmailsToolTests
         _providerMock.Setup(p => p.SearchEmailsAsync(It.IsAny<EmailSearchQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(emails);
 
-        var result = await SearchEmailsTool.SearchEmails(_providerMock.Object, query: "test");
+        var result = await SearchEmailsTool.SearchEmails(TestRegistry.For(_providerMock.Object), query: "test");
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetArrayLength().Should().Be(1);

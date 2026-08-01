@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using EmailMcp.Abstractions;
 using EmailMcp.Gmail;
 using ModelContextProtocol.Server;
@@ -10,58 +9,79 @@ namespace EmailMcp.Server.Tools;
 public static class AuthStatusTool
 {
     [McpServerTool(Name = "auth_status"), Description(
-        "Checks authentication status for the email provider. " +
-        "If not configured, instructs the user to run 'setup_gmail' first. " +
+        "Checks authentication status for one account. " +
+        "If credentials are not configured, explains how to set them up. " +
         "If configured but not authenticated, initiates the OAuth flow which opens a browser for consent. " +
         "Run this tool first before using any other email tools.")]
     public static async Task<string> AuthStatus(
-        IEmailAuthenticator authenticator,
+        IAccountRegistry accounts,
         [Description("Set to true to force re-authentication")] bool forceReauth = false,
+        [Description(AccountParameter.Description)] string? account = null,
         CancellationToken cancellationToken = default)
     {
-        // Check if credentials are configured
+        string alias;
+        IEmailAuthenticator authenticator;
+        try
+        {
+            alias = await accounts.ResolveAliasAsync(account, cancellationToken);
+            authenticator = await accounts.GetAuthenticatorAsync(alias, cancellationToken);
+        }
+        catch (AccountException ex)
+        {
+            return ToolResponse.Error(ex.Message);
+        }
+
         if (authenticator is GmailAuthenticator gmailAuth)
         {
             var configured = await gmailAuth.AreCredentialsConfiguredAsync(cancellationToken);
             if (!configured)
             {
-                return JsonSerialize(new
+                return ToolResponse.Json(new
                 {
                     Provider = authenticator.ProviderName,
+                    Account = alias,
                     Status = "not_configured",
-                    Message = "Gmail credentials are not configured. " +
+                    Message = $"Gmail credentials are not configured for account '{alias}'. " +
                         "Please follow these steps to set up Gmail API access:",
                     SetupInstructions = new[]
                     {
                         "1. Go to https://console.cloud.google.com/",
                         "2. Create a new project (or select an existing one) from the top dropdown",
-                        "3. In the left menu, go to 'APIs & Services' → 'Library'",
+                        "3. In the left menu, go to 'APIs & Services' -> 'Library'",
                         "4. Search for 'Gmail API' and click 'Enable'",
-                        "5. Go to 'APIs & Services' → 'OAuth consent screen'",
+                        "5. Go to 'APIs & Services' -> 'OAuth consent screen'",
                         "6. Choose 'External' user type, click 'Create'",
                         "7. Fill in the App name (e.g. 'Email MCP'), your email, and save",
                         "8. On the 'Test users' page, click 'Add users' and add your Gmail address, then save",
-                        "9. Go to 'APIs & Services' → 'Credentials'",
-                        "10. Click 'Create Credentials' → 'OAuth client ID'",
+                        "9. Go to 'APIs & Services' -> 'Credentials'",
+                        "10. Click 'Create Credentials' -> 'OAuth client ID'",
                         "11. Choose 'Desktop app' as application type, give it a name, click 'Create'",
                         "12. Copy the 'Client ID' and 'Client Secret' shown in the popup",
                     },
-                    NextStep = "Once you have the Client ID and Client Secret, use the 'setup_gmail' tool to provide them.",
+                    NextStep = "Once you have the Client ID and Client Secret, use the 'add_account' tool " +
+                        "(or 'setup_gmail' for a single-account setup) to provide them.",
                 });
             }
         }
 
         if (forceReauth)
         {
-            var success = await authenticator.ReauthAsync(cancellationToken);
-            return JsonSerialize(new
+            var reauthed = await authenticator.ReauthAsync(cancellationToken);
+            if (reauthed)
+            {
+                await accounts.TryRecordAddressAsync(alias, cancellationToken);
+            }
+
+            return ToolResponse.Json(new
             {
                 Provider = authenticator.ProviderName,
-                Status = success ? "authenticated" : "failed",
-                Message = success
-                    ? "Successfully re-authenticated. You can now use email tools."
+                Account = alias,
+                Status = reauthed ? "authenticated" : "failed",
+                Message = reauthed
+                    ? $"Successfully re-authenticated account '{alias}'. You can now use email tools."
                     : "Re-authentication failed. Your credentials are still configured. " +
-                      "Run 'auth_status' again to retry, or use 'setup_gmail' to reconfigure credentials.",
+                      "Run 'auth_status' again to retry, or reconfigure the credentials with " +
+                      "'setup_gmail' (single-account setups) or 'update_account_credentials'.",
             });
         }
 
@@ -70,25 +90,31 @@ public static class AuthStatusTool
         if (!isAuthenticated)
         {
             var success = await authenticator.AuthenticateAsync(cancellationToken);
-            return JsonSerialize(new
+            if (success)
+            {
+                await accounts.TryRecordAddressAsync(alias, cancellationToken);
+            }
+
+            return ToolResponse.Json(new
             {
                 Provider = authenticator.ProviderName,
+                Account = alias,
                 Status = success ? "authenticated" : "failed",
                 Message = success
-                    ? "Successfully authenticated. You can now use email tools."
+                    ? $"Successfully authenticated account '{alias}'. You can now use email tools."
                     : "Authentication failed. Your credentials are still configured. " +
                       "Run 'auth_status' again to retry, or use 'auth_status' with forceReauth to start a fresh session.",
             });
         }
 
-        return JsonSerialize(new
+        await accounts.TryRecordAddressAsync(alias, cancellationToken);
+
+        return ToolResponse.Json(new
         {
             Provider = authenticator.ProviderName,
+            Account = alias,
             Status = "authenticated",
-            Message = "Already authenticated. Email tools are ready to use.",
+            Message = $"Account '{alias}' is already authenticated. Email tools are ready to use.",
         });
     }
-
-    private static string JsonSerialize(object value) =>
-        JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
 }

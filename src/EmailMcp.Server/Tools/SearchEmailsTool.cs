@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using EmailMcp.Abstractions;
 using ModelContextProtocol.Server;
 
@@ -13,7 +12,7 @@ public static class SearchEmailsTool
         "(e.g., 'from:john subject:meeting after:2025/01/01'). " +
         "Can also filter by individual fields: from, to, subject, date range, and label.")]
     public static async Task<string> SearchEmails(
-        IEmailProvider emailProvider,
+        IAccountRegistry accounts,
         [Description("Search query string (Gmail syntax, e.g., 'from:alice subject:report is:unread')")] string? query = null,
         [Description("Filter by sender email address")] string? from = null,
         [Description("Filter by recipient email address")] string? to = null,
@@ -22,44 +21,57 @@ public static class SearchEmailsTool
         [Description("Only emails before this date (format: yyyy-MM-dd)")] string? before = null,
         [Description("Filter by label ID")] string? labelId = null,
         [Description("Maximum number of results (1-50, default 20)")] int maxResults = 20,
+        [Description(AccountParameter.Description)] string? account = null,
         CancellationToken cancellationToken = default)
     {
-        maxResults = Math.Clamp(maxResults, 1, 50);
-
-        var searchQuery = new EmailSearchQuery
+        try
         {
-            Query = query,
-            From = from,
-            To = to,
-            Subject = subject,
-            After = ParseDate(after),
-            Before = ParseDate(before),
-            LabelId = labelId,
-            MaxResults = maxResults,
-        };
+            var emailProvider = await accounts.GetProviderAsync(account, cancellationToken);
+            maxResults = Math.Clamp(maxResults, 1, 50);
 
-        var emails = await emailProvider.SearchEmailsAsync(searchQuery, cancellationToken);
+            var searchQuery = new EmailSearchQuery
+            {
+                Query = query,
+                From = from,
+                To = to,
+                Subject = subject,
+                After = ParseDate(after),
+                Before = ParseDate(before),
+                LabelId = labelId,
+                MaxResults = maxResults,
+            };
 
-        var result = emails.Select(e => new
+            var emails = await emailProvider.SearchEmailsAsync(searchQuery, cancellationToken);
+
+            var result = emails.Select(e => new
+            {
+                e.Id,
+                e.Subject,
+                From = e.From?.ToString(),
+                Date = e.Date?.ToString("yyyy-MM-dd HH:mm"),
+                e.Snippet,
+                e.IsUnread,
+            });
+
+            return ToolResponse.Json(result);
+        }
+        catch (AccountException ex)
         {
-            e.Id,
-            e.Subject,
-            From = e.From?.ToString(),
-            Date = e.Date?.ToString("yyyy-MM-dd HH:mm"),
-            e.Snippet,
-            e.IsUnread,
-        });
-
-        return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+            return ToolResponse.Error(ex.Message);
+        }
     }
 
     private static DateTimeOffset? ParseDate(string? dateStr)
     {
         if (string.IsNullOrWhiteSpace(dateStr))
+        {
             return null;
+        }
 
         if (DateTimeOffset.TryParse(dateStr, out var date))
+        {
             return date;
+        }
 
         return null;
     }

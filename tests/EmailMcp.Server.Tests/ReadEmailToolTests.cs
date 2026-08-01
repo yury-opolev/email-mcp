@@ -38,7 +38,7 @@ public class ReadEmailToolTests
         _providerMock.Setup(p => p.GetEmailAsync("msg-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(email);
 
-        var result = await ReadEmailTool.ReadEmail(_providerMock.Object, "msg-1");
+        var result = await ReadEmailTool.ReadEmail(TestRegistry.For(_providerMock.Object), "msg-1");
         var doc = JsonDocument.Parse(result);
 
         doc.RootElement.GetProperty("Subject").GetString().Should().Be("Hello");

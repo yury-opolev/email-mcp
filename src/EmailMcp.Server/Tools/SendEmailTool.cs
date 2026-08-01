@@ -19,7 +19,7 @@ public static class SendEmailTool
         "Attachments are given as local file paths on the machine running this server; " +
         "the total must stay under Gmail's 25 MB limit.")]
     public static async Task<string> SendEmail(
-        IEmailProvider emailProvider,
+        IAccountRegistry accounts,
         [Description("Comma-separated list of recipient email addresses (e.g. 'alice@example.com, Bob <bob@example.com>').")] string to,
         [Description("Email subject line.")] string subject,
         [Description("Plain-text body. Provide either body, bodyHtml, or both.")] string? body = null,
@@ -27,6 +27,7 @@ public static class SendEmailTool
         [Description("Comma-separated list of Cc recipients (optional).")] string? cc = null,
         [Description("Comma-separated list of Bcc recipients (optional).")] string? bcc = null,
         [Description("Comma-separated list of local file paths to attach (optional), e.g. 'C:\\\\reports\\\\q3.pdf, C:\\\\img\\\\chart.png'. Total size must be under 25 MB.")] string? attachments = null,
+        [Description(AccountParameter.Description)] string? account = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(to))
@@ -66,6 +67,18 @@ public static class SendEmailTool
             return Error("Could not parse any valid recipient addresses from 'to'.");
         }
 
+        string alias;
+        IEmailProvider emailProvider;
+        try
+        {
+            alias = await accounts.ResolveAliasAsync(account, cancellationToken);
+            emailProvider = await accounts.GetProviderAsync(alias, cancellationToken);
+        }
+        catch (AccountException ex)
+        {
+            return Error(ex.Message);
+        }
+
         try
         {
             var messageId = await emailProvider.SendEmailAsync(request, cancellationToken);
@@ -73,6 +86,7 @@ public static class SendEmailTool
             return Json(new
             {
                 Success = true,
+                Account = alias,
                 MessageId = messageId,
                 To = request.To.Select(a => a.ToString()),
                 Cc = request.Cc.Select(a => a.ToString()),
@@ -84,10 +98,11 @@ public static class SendEmailTool
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden)
         {
             return Error(
-                "Gmail rejected the send request with HTTP 403. The most common cause is " +
-                "insufficient OAuth scope — the stored token was granted before send capability " +
-                "was added. Run 'revoke_auth' then 'auth_status' to re-authenticate with the " +
-                "broader scope. Underlying error: " + ex.Message);
+                $"Gmail rejected the send request for account '{alias}' with HTTP 403. The most " +
+                "common cause is insufficient OAuth scope: the stored token was granted before " +
+                $"send capability was added. Run 'revoke_auth' then 'auth_status' for account " +
+                $"'{alias}' to re-authenticate with the broader scope. " +
+                "Underlying error: " + ex.Message);
         }
         catch (Exception ex)
         {

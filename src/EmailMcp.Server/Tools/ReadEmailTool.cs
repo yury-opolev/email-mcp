@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using EmailMcp.Abstractions;
 using ModelContextProtocol.Server;
 
@@ -12,32 +11,41 @@ public static class ReadEmailTool
         "Reads a specific email by its message ID. Returns the full email content including body, " +
         "headers, attachments info, and labels. Use list_emails or search_emails first to find message IDs.")]
     public static async Task<string> ReadEmail(
-        IEmailProvider emailProvider,
+        IAccountRegistry accounts,
         [Description("The email message ID to read")] string messageId,
+        [Description(AccountParameter.Description)] string? account = null,
         CancellationToken cancellationToken = default)
     {
-        var email = await emailProvider.GetEmailAsync(messageId, cancellationToken);
-
-        var result = new
+        try
         {
-            email.Id,
-            email.ThreadId,
-            email.Subject,
-            From = email.From?.ToString(),
-            To = email.To.Select(a => a.ToString()).ToList(),
-            Cc = email.Cc.Select(a => a.ToString()).ToList(),
-            Date = email.Date?.ToString("yyyy-MM-dd HH:mm:ss zzz"),
-            email.Body,
-            email.IsUnread,
-            Labels = email.LabelIds,
-            Attachments = email.Attachments.Select(a => new
-            {
-                a.Filename,
-                a.MimeType,
-                a.Size,
-            }).ToList(),
-        };
+            var emailProvider = await accounts.GetProviderAsync(account, cancellationToken);
+            var email = await emailProvider.GetEmailAsync(messageId, cancellationToken);
 
-        return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+            var result = new
+            {
+                email.Id,
+                email.ThreadId,
+                email.Subject,
+                From = email.From?.ToString(),
+                To = email.To.Select(a => a.ToString()).ToList(),
+                Cc = email.Cc.Select(a => a.ToString()).ToList(),
+                Date = email.Date?.ToString("yyyy-MM-dd HH:mm:ss zzz"),
+                email.Body,
+                email.IsUnread,
+                Labels = email.LabelIds,
+                Attachments = email.Attachments.Select(a => new
+                {
+                    a.Filename,
+                    a.MimeType,
+                    a.Size,
+                }).ToList(),
+            };
+
+            return ToolResponse.Json(result);
+        }
+        catch (AccountException ex)
+        {
+            return ToolResponse.Error(ex.Message);
+        }
     }
 }
