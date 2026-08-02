@@ -124,8 +124,12 @@ public class GmailAccountRegistryTests
 
         await subject.RenameAccountAsync("studio", "work");
 
+        // The rename itself calls LoadAsync first, which promotes "studio"'s per-account
+        // credentials to the shared key and deletes the per-account copy before the rename's
+        // own move runs - so there is nothing left under either alias to move.
         _store.Keys.Should().NotContain(AccountKeys.LegacyAccountClientCredentials("studio"));
-        _store.Keys.Should().Contain(AccountKeys.LegacyAccountClientCredentials("work"));
+        _store.Keys.Should().NotContain(AccountKeys.LegacyAccountClientCredentials("work"));
+        _store.Keys.Should().Contain(AccountKeys.SharedClientCredentials);
         (await _store.LoadTokenAsync(AccountKeys.OAuthToken("work"))).Should().Be("token-data");
         (await subject.ResolveAliasAsync(null)).Should().Be("work");
     }
