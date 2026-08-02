@@ -1,3 +1,4 @@
+using System.Text.Json;
 using EmailMcp.Abstractions;
 using EmailMcp.Server.Tools;
 using FluentAssertions;
@@ -92,7 +93,8 @@ public class SetupGmailToolTests
             .ThrowsAsync(new AccountException("Client ID doesn't look right."));
 
         var response = await SetupGmailTool.SetupGmail(registry.Object, "nope", Secret);
+        var doc = JsonDocument.Parse(response);
 
-        response.Should().Contain("doesn't look right");
+        doc.RootElement.GetProperty("Error").GetString().Should().Contain("doesn't look right");
     }
 }
