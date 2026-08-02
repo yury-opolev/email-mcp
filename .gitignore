@@ -7,8 +7,10 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/Dotnet.gitignore
 
-# Publish output
+# Publish output, plus the staging directories scripts/install-local.ps1 publishes into
 publish/
+publish-staging/
+publish-new/
 
 # Build results
 [Dd]ebug/

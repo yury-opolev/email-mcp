@@ -146,6 +146,35 @@ dotnet build
 dotnet test
 ```
 
+## Upgrading a local install
+
+When the server is registered with an MCP client that launches it from `publish/`, a plain
+`dotnet publish -o publish` fails with **MSB3027**: the running server holds the assemblies,
+and Windows will not overwrite a mapped image. Use the install script instead — it publishes
+to a staging directory and swaps the files in without needing the client to be closed:
+
+```powershell
+pwsh scripts/install-local.ps1
+```
+
+Then restart the MCP client. Sessions already running keep executing the code they mapped at
+launch, so nothing changes for them until they relaunch the server.
+
+The swap works because Windows *does* allow renaming a mapped image even though it refuses to
+delete or overwrite one. Each locked file is renamed to `<name>.locked-<stamp>` and the new
+file is copied into the path it vacated, so a valid assembly sits at every path throughout —
+a lazily loaded assembly resolves to the new copy rather than a hole. The `.locked-*` strays
+are deleted by the next run, once the processes holding them have exited.
+
+Useful flags:
+
+| Flag | Effect |
+|---|---|
+| `-DryRun` | Report what would change, touch nothing |
+| `-SkipBuild` | Install from an existing `-StagingPath` instead of publishing |
+| `-StagingPath` / `-TargetPath` | Override the staging and install directories |
+| `-Configuration` | Build configuration, defaults to `Release` |
+
 ## License
 
 BSD 3-Clause — see [LICENSE](LICENSE) for details.
