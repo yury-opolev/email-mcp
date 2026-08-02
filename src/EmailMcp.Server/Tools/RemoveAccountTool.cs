@@ -8,11 +8,11 @@ namespace EmailMcp.Server.Tools;
 public static class RemoveAccountTool
 {
     [McpServerTool(Name = "remove_account"), Description(
-        "Removes an account and deletes its stored credentials and sign-in. " +
-        "By default the OAuth grant is also revoked with Google, so the app loses access to that " +
-        "mailbox entirely; pass revokeRemote=false to delete only the local copies and leave the " +
-        "grant in place. If the removed account was the default and exactly one account remains, " +
-        "that one becomes the default.")]
+        "Removes an account and its stored sign-in. The shared Client ID and Secret are untouched " +
+        "and every other account is unaffected. By default the OAuth grant is also revoked with " +
+        "Google, so the app loses access to that mailbox entirely; pass revokeRemote=false to " +
+        "delete only the local copy and leave the grant in place. If the removed account was the " +
+        "default and exactly one account remains, that one becomes the default.")]
     public static async Task<string> RemoveAccount(
         IAccountRegistry accounts,
         [Description("Alias of the account to remove.")] string alias,
