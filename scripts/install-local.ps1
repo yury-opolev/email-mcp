@@ -177,6 +177,46 @@ foreach ($source in @(Get-ChildItem $staging -Recurse -File)) {
     $copiedCount++
 }
 
+# --- record when this content was installed ---------------------------------------------
+
+# A server process is running stale code iff it started BEFORE the currently installed files
+# were put in place. Copy-Item preserves the source's timestamps, so the target's mtime is
+# when the build was produced rather than when it was installed - those differ, and the gap
+# is exactly where a wrong answer would come from. Record the install time explicitly, and
+# only when something actually changed, so the stamp keeps describing the content on disk.
+
+$stampPath = Join-Path $target '.install-local-stamp'
+
+if ($copiedCount -gt 0 -and -not $DryRun) {
+    Set-Content -Path $stampPath -Value (Get-Date).ToString('o') -Encoding utf8
+}
+
+$installedAt = $null
+if (Test-Path $stampPath) {
+    try {
+        $installedAt = [datetime]::Parse((Get-Content $stampPath -Raw).Trim())
+    }
+    catch {
+        $installedAt = $null
+    }
+}
+if ($null -eq $installedAt) {
+    # No stamp: this install predates the stamp file, or it was removed. Fall back to the
+    # server assembly's own mtime, which is a lower bound on when it was installed.
+    $installedExe = Join-Path $target 'EmailMcp.Server.exe'
+    if (Test-Path $installedExe) {
+        $installedAt = (Get-Item $installedExe).LastWriteTime
+    }
+}
+
+$staleProcesses = @()
+if ($null -ne $installedAt) {
+    $staleProcesses = @(
+        Get-Process EmailMcp.Server -ErrorAction SilentlyContinue |
+            Where-Object { $_.StartTime -lt $installedAt }
+    )
+}
+
 # --- report -----------------------------------------------------------------------------
 
 Write-Host ''
@@ -195,14 +235,27 @@ if ($displacedNames.Count -gt 0) {
     foreach ($name in $displacedNames) {
         Write-Host "  $name"
     }
-    Write-Host ''
-    Write-Host 'RESTART CLAUDE CODE to load the new build. Sessions running right now keep' -ForegroundColor Yellow
-    Write-Host 'executing the old code they already mapped.' -ForegroundColor Yellow
 }
-elseif (-not $DryRun) {
-    $running = @(Get-Process EmailMcp.Server -ErrorAction SilentlyContinue)
-    if ($running.Count -gt 0) {
-        Write-Host ''
-        Write-Host "RESTART CLAUDE CODE - $($running.Count) EmailMcp.Server process(es) are still running the old build." -ForegroundColor Yellow
+
+if ($DryRun) {
+    return
+}
+
+Write-Host ''
+if ($staleProcesses.Count -gt 0) {
+    Write-Host "RESTART CLAUDE CODE - $($staleProcesses.Count) EmailMcp.Server process(es) started before this build was installed:" -ForegroundColor Yellow
+    foreach ($process in $staleProcesses) {
+        Write-Host ("  PID {0}, started {1}" -f $process.Id, $process.StartTime.ToString('yyyy-MM-dd HH:mm:ss'))
     }
+    Write-Host 'They keep executing the code they mapped at launch.' -ForegroundColor Yellow
+    if ($stillLockedCount -gt 0) {
+        Write-Host 'One of them is what still holds the .locked-* files above. If a PID predates' -ForegroundColor Yellow
+        Write-Host 'your current session it is an orphan and can be ended to free them.' -ForegroundColor Yellow
+    }
+}
+elseif ($copiedCount -gt 0) {
+    Write-Host 'RESTART CLAUDE CODE to load the new build.' -ForegroundColor Yellow
+}
+else {
+    Write-Host 'Already current - nothing to do.' -ForegroundColor Green
 }

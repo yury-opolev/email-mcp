@@ -166,6 +166,11 @@ file is copied into the path it vacated, so a valid assembly sits at every path 
 a lazily loaded assembly resolves to the new copy rather than a hole. The `.locked-*` strays
 are deleted by the next run, once the processes holding them have exited.
 
+The script records the install time in `publish/.install-local-stamp` and reports any server
+process that started *before* it — those are the ones still executing stale code, and an old
+orphan among them is usually what keeps the `.locked-*` files pinned. A process started after
+the stamp is already running the current build, so it is not reported.
+
 Useful flags:
 
 | Flag | Effect |
