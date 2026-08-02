@@ -42,7 +42,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         this.logger = logger;
         this.accountAlias = accountAlias;
         this.oauthTokenKey = AccountKeys.OAuthToken(accountAlias);
-        this.clientCredentialsKey = AccountKeys.LegacyAccountClientCredentials(accountAlias);
+        this.clientCredentialsKey = AccountKeys.SharedClientCredentials;
     }
 
     public async Task<bool> IsAuthenticatedAsync(CancellationToken cancellationToken = default)
@@ -140,14 +140,6 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
     }
 
     /// <summary>
-    /// Deletes this account's stored client credentials. Used when removing an account.
-    /// </summary>
-    internal async Task DeleteClientCredentialsAsync(CancellationToken cancellationToken = default)
-    {
-        await this.tokenStore.DeleteTokenAsync(this.clientCredentialsKey, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Asks Gmail which address this account is actually signed in as.
     /// Returns null if the lookup fails; callers must treat that as non-fatal.
     /// </summary>
@@ -199,12 +191,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         return this.credential;
     }
 
-    private string ResolveCredentialsPath() =>
-        this.options.CredentialsPath
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                ".email-mcp",
-                "credentials.json");
+    private string ResolveCredentialsPath() => GmailCredentialsPath.Resolve(this.options);
 
     private async Task<ClientSecrets> LoadClientSecretsAsync(CancellationToken cancellationToken)
     {
@@ -228,7 +215,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         {
             throw new FileNotFoundException(
                 $"Gmail credentials are not configured for account '{this.accountAlias}'. " +
-                "Use the 'add_account' tool to provide a Google OAuth Client ID and Client Secret, " +
+                "Run 'setup_gmail' with a Google OAuth Client ID and Client Secret, " +
                 "or place a credentials.json file at: " + credentialsPath);
         }
 

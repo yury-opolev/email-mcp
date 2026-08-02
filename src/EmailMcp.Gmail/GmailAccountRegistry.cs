@@ -70,23 +70,25 @@ public sealed class GmailAccountRegistry : IAccountRegistry
 
     public async Task AddAccountAsync(
         string alias,
-        string clientId,
-        string clientSecret,
         bool setDefault,
         CancellationToken cancellationToken = default)
     {
         var normalized = RequireValidAlias(alias);
+
+        if (!await this.AreSharedCredentialsConfiguredAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new AccountException(
+                "No OAuth client credentials are configured. Run 'setup_gmail' with your Google " +
+                "OAuth Client ID and Secret first; every account shares them.");
+        }
+
         var index = await this.indexStore.LoadAsync(cancellationToken).ConfigureAwait(false);
 
         if (index.Accounts.Any(a => a.Alias == normalized))
         {
             throw new AccountException(
-                $"An account named '{normalized}' already exists. " +
-                "Use 'update_account_credentials' to change its credentials, or pick another alias.");
+                $"An account named '{normalized}' already exists. Pick another alias.");
         }
-
-        await this.StoreClientCredentialsAsync(normalized, clientId, clientSecret, cancellationToken)
-            .ConfigureAwait(false);
 
         index.Accounts.Add(new EmailAccount(normalized, EmailAddress: null, DateTimeOffset.UtcNow));
 
@@ -97,6 +99,80 @@ public sealed class GmailAccountRegistry : IAccountRegistry
 
         await this.indexStore.SaveAsync(index, cancellationToken).ConfigureAwait(false);
         this.logger.LogInformation("Added account '{Alias}'", normalized);
+    }
+
+    public async Task<bool> AreSharedCredentialsConfiguredAsync(CancellationToken cancellationToken = default)
+    {
+        if (await this.tokenStore
+            .ExistsAsync(AccountKeys.SharedClientCredentials, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        return File.Exists(GmailCredentialsPath.Resolve(this.options));
+    }
+
+    public async Task<CredentialUpdateResult> SetSharedCredentialsAsync(
+        string clientId,
+        string clientSecret,
+        CancellationToken cancellationToken = default)
+    {
+        var previousClientId = await this.TryReadStoredClientIdAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        await this.StoreSharedCredentialsAsync(clientId, clientSecret, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Every cached authenticator holds a credential built from the old client.
+        this.authenticators.Clear();
+        this.providers.Clear();
+
+        var changed = previousClientId is not null
+            && !string.Equals(previousClientId, clientId.Trim(), StringComparison.Ordinal);
+
+        var authenticated = new List<string>();
+        if (changed)
+        {
+            var index = await this.indexStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var account in index.Accounts)
+            {
+                if (await this.IsAuthenticatedAsync(account.Alias, cancellationToken).ConfigureAwait(false))
+                {
+                    authenticated.Add(account.Alias);
+                }
+            }
+        }
+
+        return new CredentialUpdateResult(changed, authenticated);
+    }
+
+    private async Task<string?> TryReadStoredClientIdAsync(CancellationToken cancellationToken)
+    {
+        var json = await this.tokenStore
+            .LoadTokenAsync(AccountKeys.SharedClientCredentials, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (json is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("installed", out var installed)
+                && installed.TryGetProperty("client_id", out var id))
+            {
+                return id.GetString();
+            }
+        }
+        catch (JsonException ex)
+        {
+            this.logger.LogWarning(ex, "Stored client credentials are not readable JSON");
+        }
+
+        return null;
     }
 
     public async Task RemoveAccountAsync(
@@ -115,8 +191,6 @@ public sealed class GmailAccountRegistry : IAccountRegistry
         }
 
         await this.tokenStore.DeleteTokenAsync(AccountKeys.OAuthToken(normalized), cancellationToken)
-            .ConfigureAwait(false);
-        await this.tokenStore.DeleteTokenAsync(AccountKeys.LegacyAccountClientCredentials(normalized), cancellationToken)
             .ConfigureAwait(false);
 
         index.Accounts.Remove(account);
@@ -149,11 +223,6 @@ public sealed class GmailAccountRegistry : IAccountRegistry
         }
 
         await this.MoveTokenAsync(
-            AccountKeys.LegacyAccountClientCredentials(from),
-            AccountKeys.LegacyAccountClientCredentials(to),
-            cancellationToken).ConfigureAwait(false);
-
-        await this.MoveTokenAsync(
             AccountKeys.OAuthToken(from),
             AccountKeys.OAuthToken(to),
             cancellationToken).ConfigureAwait(false);
@@ -181,23 +250,6 @@ public sealed class GmailAccountRegistry : IAccountRegistry
 
         index.DefaultAlias = normalized;
         await this.indexStore.SaveAsync(index, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task UpdateCredentialsAsync(
-        string alias,
-        string clientId,
-        string clientSecret,
-        CancellationToken cancellationToken = default)
-    {
-        var normalized = AccountAlias.Normalize(alias);
-        var index = await this.indexStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        RequireExisting(index, normalized);
-
-        await this.StoreClientCredentialsAsync(normalized, clientId, clientSecret, cancellationToken)
-            .ConfigureAwait(false);
-
-        this.authenticators.TryRemove(normalized, out _);
-        this.providers.TryRemove(normalized, out _);
     }
 
     /// <summary>
@@ -308,8 +360,7 @@ public sealed class GmailAccountRegistry : IAccountRegistry
         return account;
     }
 
-    private async Task StoreClientCredentialsAsync(
-        string alias,
+    private async Task StoreSharedCredentialsAsync(
         string clientId,
         string clientSecret,
         CancellationToken cancellationToken)
@@ -345,7 +396,7 @@ public sealed class GmailAccountRegistry : IAccountRegistry
 
         var json = JsonSerializer.Serialize(credentials);
         await this.tokenStore
-            .SaveTokenAsync(AccountKeys.LegacyAccountClientCredentials(alias), json, cancellationToken)
+            .SaveTokenAsync(AccountKeys.SharedClientCredentials, json, cancellationToken)
             .ConfigureAwait(false);
     }
 

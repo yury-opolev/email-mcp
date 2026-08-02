@@ -8,11 +8,10 @@ namespace EmailMcp.Server.Tools;
 public static class SetupGmailTool
 {
     [McpServerTool(Name = "setup_gmail"), Description(
-        "Sets up Gmail credentials for a single-account setup. " +
-        "With no accounts configured this creates one called 'default'; with exactly one account " +
-        "configured it replaces that account's credentials. If several accounts exist, use " +
-        "'add_account' or 'update_account_credentials' instead so it is clear which one you mean. " +
-        "Requires a Google OAuth Client ID and Client Secret from Google Cloud Console. " +
+        "Stores the Google OAuth Client ID and Client Secret used by every account. " +
+        "One OAuth client authorises any number of Google accounts, so this is set once, " +
+        "not per account. With no accounts configured this also creates one called 'default'. " +
+        "Running it again rotates the client for every account. " +
         "These values are encrypted and stored locally - they never leave your machine. " +
         "How to get these values: " +
         "1) Go to https://console.cloud.google.com " +
@@ -30,46 +29,42 @@ public static class SetupGmailTool
         try
         {
             var existing = await accounts.ListAccountsAsync(cancellationToken);
+            var result = await accounts.SetSharedCredentialsAsync(clientId, clientSecret, cancellationToken);
 
-            switch (existing.Count)
+            if (existing.Count == 0)
             {
-                case 0:
-                    await accounts.AddAccountAsync(
-                        AccountKeys.LegacyAlias,
-                        clientId,
-                        clientSecret,
-                        setDefault: true,
-                        cancellationToken);
+                await accounts.AddAccountAsync(AccountKeys.LegacyAlias, setDefault: true, cancellationToken);
 
-                    return ToolResponse.Json(new
-                    {
-                        Success = true,
-                        Account = AccountKeys.LegacyAlias,
-                        Message = "Gmail credentials saved and encrypted for the 'default' account. " +
-                            "Now use the 'auth_status' tool to authenticate with your Google account. " +
-                            "This will open a browser window for you to sign in.",
-                    });
-
-                case 1:
-                    var alias = existing[0].Alias;
-                    await accounts.UpdateCredentialsAsync(alias, clientId, clientSecret, cancellationToken);
-
-                    return ToolResponse.Json(new
-                    {
-                        Success = true,
-                        Account = alias,
-                        Message = $"Gmail credentials replaced for account '{alias}'. " +
-                            "The previously stored sign-in may no longer be valid; " +
-                            "run 'auth_status' to re-authenticate.",
-                    });
-
-                default:
-                    return ToolResponse.Error(
-                        "Several accounts are configured, so 'setup_gmail' cannot tell which one you mean. " +
-                        "Use 'add_account' to create a new one, or 'update_account_credentials' to change " +
-                        "an existing one. Known accounts: " +
-                        string.Join(", ", existing.Select(a => a.Alias)) + ".");
+                return ToolResponse.Json(new
+                {
+                    Success = true,
+                    Account = AccountKeys.LegacyAlias,
+                    Message = "Credentials saved and encrypted, and the 'default' account was created. " +
+                        "Now use the 'auth_status' tool to authenticate with your Google account. " +
+                        "This will open a browser window for you to sign in.",
+                });
             }
+
+            if (result.ClientIdChanged && result.AuthenticatedAccounts.Count > 0)
+            {
+                return ToolResponse.Json(new
+                {
+                    Success = true,
+                    ClientIdChanged = true,
+                    NeedsReauthentication = result.AuthenticatedAccounts,
+                    Message = "Credentials replaced for every account. The Client ID changed, so the " +
+                        "stored sign-in for these accounts is no longer valid: " +
+                        string.Join(", ", result.AuthenticatedAccounts) +
+                        ". Run 'auth_status' for each of them to sign in again.",
+                });
+            }
+
+            return ToolResponse.Json(new
+            {
+                Success = true,
+                ClientIdChanged = result.ClientIdChanged,
+                Message = "Credentials saved and encrypted. They apply to every configured account.",
+            });
         }
         catch (AccountException ex)
         {
