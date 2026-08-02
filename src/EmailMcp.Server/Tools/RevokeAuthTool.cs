@@ -12,7 +12,7 @@ public static class RevokeAuthTool
         "account. Use this when you want to completely disconnect the app from that Google account. " +
         "After revoking, run 'auth_status' to re-authenticate. " +
         "This does NOT delete the stored client credentials (Client ID / Secret) - " +
-        "use 'update_account_credentials' to change those, or 'remove_account' to delete the account.")]
+        "use 'setup_gmail' to change those, or 'remove_account' to delete the account.")]
     public static async Task<string> RevokeAuth(
         IAccountRegistry accounts,
         [Description(AccountParameter.Description)] string? account = null,

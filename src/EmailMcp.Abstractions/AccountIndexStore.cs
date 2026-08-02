@@ -29,18 +29,22 @@ public sealed class AccountIndexStore
         await this.MigrateLegacyIfNeededAsync(cancellationToken).ConfigureAwait(false);
 
         var json = await this.tokenStore.LoadTokenAsync(AccountKeys.Index, cancellationToken).ConfigureAwait(false);
-        if (json is null)
-        {
-            return new AccountIndex();
-        }
+        var index = json is null ? new AccountIndex() : Deserialize(json, this.logger);
 
+        await this.MigrateCredentialsToSharedIfNeededAsync(index, cancellationToken).ConfigureAwait(false);
+
+        return index;
+    }
+
+    private static AccountIndex Deserialize(string json, ILogger<AccountIndexStore> logger)
+    {
         try
         {
             return JsonSerializer.Deserialize<AccountIndex>(json, serializerOptions) ?? new AccountIndex();
         }
         catch (JsonException ex)
         {
-            this.logger.LogError(ex, "Account index is corrupt; treating it as empty");
+            logger.LogError(ex, "Account index is corrupt; treating it as empty");
             return new AccountIndex();
         }
     }
@@ -80,7 +84,7 @@ public sealed class AccountIndexStore
             AccountKeys.LegacyAlias);
 
         await this.tokenStore.SaveTokenAsync(
-            AccountKeys.ClientCredentials(AccountKeys.LegacyAlias),
+            AccountKeys.SharedClientCredentials,
             legacyCredentials,
             cancellationToken).ConfigureAwait(false);
 
@@ -113,5 +117,89 @@ public sealed class AccountIndexStore
             .ConfigureAwait(false);
 
         this.logger.LogInformation("Migration complete; the previous session remains authenticated");
+    }
+
+    /// <summary>
+    /// Promotes per-account client credentials to the single shared key, once.
+    /// </summary>
+    /// <remarks>
+    /// The shared copy is written before any per-account copy is deleted, so a crash part-way
+    /// through the write leaves the per-account copies untouched, and the next run repeats the
+    /// promotion because the readability check below does not see a torn shared write as present.
+    /// A crash after the shared write completes but before all per-account copies are deleted
+    /// leaves the credentials readable under both keys.
+    /// </remarks>
+    private async Task MigrateCredentialsToSharedIfNeededAsync(
+        AccountIndex index,
+        CancellationToken cancellationToken)
+    {
+        if (index.Accounts.Count == 0)
+        {
+            return;
+        }
+
+        var hasShared = await this.tokenStore
+            .LoadTokenAsync(AccountKeys.SharedClientCredentials, cancellationToken)
+            .ConfigureAwait(false) is not null;
+
+        if (!hasShared)
+        {
+            // The default account's copy wins. Falling back to index order keeps the rule total
+            // for an index that records no default, which no supported flow produces.
+            var preferred = index.Accounts.FirstOrDefault(a => a.Alias == index.DefaultAlias)
+                ?? index.Accounts[0];
+
+            var promoted = await this.tokenStore
+                .LoadTokenAsync(
+                    AccountKeys.LegacyAccountClientCredentials(preferred.Alias),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            promoted ??= await this.FindAnyAccountCredentialsAsync(index, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (promoted is null)
+            {
+                return;
+            }
+
+            this.logger.LogInformation(
+                "Promoting the client credentials of account '{Alias}' to the shared key",
+                preferred.Alias);
+
+            await this.tokenStore
+                .SaveTokenAsync(AccountKeys.SharedClientCredentials, promoted, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        foreach (var account in index.Accounts)
+        {
+            await this.tokenStore
+                .DeleteTokenAsync(
+                    AccountKeys.LegacyAccountClientCredentials(account.Alias),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private async Task<string?> FindAnyAccountCredentialsAsync(
+        AccountIndex index,
+        CancellationToken cancellationToken)
+    {
+        foreach (var account in index.Accounts)
+        {
+            var value = await this.tokenStore
+                .LoadTokenAsync(
+                    AccountKeys.LegacyAccountClientCredentials(account.Alias),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (value is not null)
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 }

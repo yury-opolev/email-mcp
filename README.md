@@ -19,7 +19,7 @@ Omit it to use the default. See [Multiple accounts](#multiple-accounts).
 
 | Tool | Description |
 |------|-------------|
-| `setup_gmail` | Sets up Gmail credentials (Client ID + Secret) for a single-account setup - values are encrypted and stored locally. Creates the `default` account, or replaces credentials when exactly one account exists |
+| `setup_gmail` | Stores the Google OAuth Client ID and Client Secret used by every account - set once, not per account. Values are encrypted and stored locally. With no accounts configured, also creates one called `default`. Running it again rotates the client for every account; the response names any accounts whose stored sign-in is no longer valid |
 | `auth_status` | Checks authentication status for one account. If not configured, explains how to set it up. If configured but not authenticated, initiates the OAuth flow. Supports `forceReauth` to start a fresh session. Run this first before using any other email tools |
 | `list_emails` | Lists recent emails from the inbox. Optionally filter by label ID (e.g., `INBOX`, `SENT`, `DRAFT`). Returns email ID, subject, sender, date, and snippet |
 | `read_email` | Reads a specific email by message ID. Returns full email content including body, headers, attachments info, and labels |
@@ -32,21 +32,20 @@ Omit it to use the default. See [Multiple accounts](#multiple-accounts).
 
 | Tool | Description |
 |------|-------------|
-| `add_account` | Adds an account under a short alias with its own Client ID and Secret. Does not sign in; run `auth_status` for that alias afterwards |
+| `add_account` | Adds an account under a short alias. Takes no credentials - every account uses the shared Client ID and Secret set by `setup_gmail`. Does not sign in; run `auth_status` for that alias afterwards |
 | `list_accounts` | Lists configured accounts: alias, real address once known, which is default, and whether signed in. Never returns secrets |
 | `set_default_account` | Chooses the account used when no `account` argument is given |
-| `rename_account` | Renames an account, moving its credentials and sign-in with it |
-| `update_account_credentials` | Replaces the Client ID and Secret for an account |
-| `remove_account` | Removes an account and its stored secrets. Revokes the Google grant by default; pass `revokeRemote=false` to keep it |
+| `rename_account` | Renames an account, moving its stored sign-in with it |
+| `remove_account` | Removes an account and its stored sign-in. Revokes the Google grant by default; pass `revokeRemote=false` to keep it |
 
 ## Multiple accounts
 
-One server can manage several mailboxes. Each account has a short alias you choose, its own
-OAuth client credentials, and its own encrypted token.
+One server can manage several mailboxes. All accounts share the one Google OAuth client, set
+once with `setup_gmail`; each account is just a short alias and its own encrypted token.
 
 ```
-add_account(alias: "studio", clientId: "...", clientSecret: "...")
-auth_status(account: "studio")
+add_account("studio")
+auth_status(account: "studio")   # sign in as the studio address
 
 send_email(to: "...", subject: "...", body: "...", account: "studio")
 list_emails()                     # uses the default account
@@ -55,6 +54,10 @@ list_emails()                     # uses the default account
 **With exactly one account configured, nothing changes.** That account is always used, whatever
 the default is set to, and the `account` argument can be ignored entirely. Existing single-account
 setups are migrated automatically on first start and stay signed in.
+
+Re-running `setup_gmail` with a different Client ID replaces the client for every account at
+once, since it is shared. The response names any accounts whose stored sign-in is no longer
+valid; run `auth_status` for each of them to sign in again.
 
 Which account gets used when `account` is omitted:
 
@@ -102,7 +105,7 @@ If you previously authenticated against an older build that only requested `gmai
 ## Quick Start
 
 1. **Prerequisites**: .NET 10 SDK, a Google Cloud project with Gmail API enabled
-2. **Setup**: See [docs/SETUP.md](docs/SETUP.md) for detailed instructions
+2. **Setup**: Get a Google OAuth Client ID and Secret, then use them with the `setup_gmail` tool once your MCP client is connected (step 4). See [docs/SETUP.md](docs/SETUP.md) for detailed instructions
 3. **Run**:
    ```bash
    dotnet run --project src/EmailMcp.Server
@@ -117,6 +120,12 @@ If you previously authenticated against an older build that only requested `gmai
        }
      }
    }
+   ```
+5. **Add a second account (optional)** - the Client ID and Secret from step 2 are shared, so a
+   new alias needs no credentials of its own, just its own sign-in:
+   ```
+   add_account("studio")
+   auth_status(account: "studio")   # sign in as the studio address
    ```
 
 ## Project Structure

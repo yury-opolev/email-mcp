@@ -34,23 +34,22 @@ public interface IAccountRegistry
     Task<IEmailAuthenticator> GetAuthenticatorAsync(string? requested, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Adds an account and stores its client credentials. Does not authenticate.
+    /// Adds an account. Does not authenticate, and does not take credentials: every account uses
+    /// the shared client.
     /// </summary>
-    /// <exception cref="AccountException">Thrown when the alias is invalid or already exists.</exception>
-    Task AddAccountAsync(
-        string alias,
-        string clientId,
-        string clientSecret,
-        bool setDefault,
-        CancellationToken cancellationToken = default);
+    /// <exception cref="AccountException">
+    /// Thrown when the alias is invalid, already exists, or no shared credentials are configured.
+    /// </exception>
+    Task AddAccountAsync(string alias, bool setDefault, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Removes an account and its stored secrets. When <paramref name="revokeRemote"/> is true,
-    /// the OAuth grant is revoked with the provider first.
+    /// Removes an account and its stored OAuth token. The shared client credentials are untouched.
+    /// When <paramref name="revokeRemote"/> is true, the OAuth grant is revoked with the provider
+    /// first.
     /// </summary>
     Task RemoveAccountAsync(string alias, bool revokeRemote, CancellationToken cancellationToken = default);
 
-    /// <summary>Renames an account, re-keying its stored secrets.</summary>
+    /// <summary>Renames an account, moving its stored OAuth token with it.</summary>
     Task RenameAccountAsync(string alias, string newAlias, CancellationToken cancellationToken = default);
 
     /// <summary>Marks an account as the default.</summary>
@@ -62,12 +61,14 @@ public interface IAccountRegistry
     /// </summary>
     Task TryRecordAddressAsync(string alias, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns true once a shared Client ID and Secret are available.</summary>
+    Task<bool> AreSharedCredentialsConfiguredAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
-    /// Replaces the client credentials for an account. The stored OAuth token is left alone and
-    /// may no longer be valid.
+    /// Replaces the client credentials shared by every account. Stored OAuth tokens are left
+    /// alone; the result says which accounts a changed Client ID has invalidated.
     /// </summary>
-    Task UpdateCredentialsAsync(
-        string alias,
+    Task<CredentialUpdateResult> SetSharedCredentialsAsync(
         string clientId,
         string clientSecret,
         CancellationToken cancellationToken = default);

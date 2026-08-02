@@ -8,7 +8,7 @@ namespace EmailMcp.Server.Tools;
 public static class RenameAccountTool
 {
     [McpServerTool(Name = "rename_account"), Description(
-        "Renames an account, moving its stored credentials and sign-in with it. " +
+        "Renames an account, moving its stored sign-in with it. " +
         "The sign-in is preserved, so there is no need to re-authenticate. " +
         "If the renamed account was the default, it stays the default under its new name.")]
     public static async Task<string> RenameAccount(
@@ -26,7 +26,7 @@ public static class RenameAccountTool
                 Success = true,
                 From = AccountAlias.Normalize(alias),
                 To = AccountAlias.Normalize(newAlias),
-                Message = "Account renamed. Its sign-in and credentials moved with it.",
+                Message = "Account renamed. Its sign-in moved with it.",
             });
         }
         catch (AccountException ex)
