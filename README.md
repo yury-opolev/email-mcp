@@ -105,7 +105,7 @@ If you previously authenticated against an older build that only requested `gmai
 ## Quick Start
 
 1. **Prerequisites**: .NET 10 SDK, a Google Cloud project with Gmail API enabled
-2. **Setup**: See [docs/SETUP.md](docs/SETUP.md) for detailed instructions
+2. **Setup**: Get a Google OAuth Client ID and Secret, then use them with the `setup_gmail` tool once your MCP client is connected (step 4). See [docs/SETUP.md](docs/SETUP.md) for detailed instructions
 3. **Run**:
    ```bash
    dotnet run --project src/EmailMcp.Server

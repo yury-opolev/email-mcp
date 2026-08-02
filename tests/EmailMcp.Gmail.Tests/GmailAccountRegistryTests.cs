@@ -19,12 +19,12 @@ public class GmailAccountRegistryTests
         NullLogger<GmailAccountRegistry>.Instance);
 
     [Fact]
-    public async Task ResolveAlias_WithNoAccounts_ExplainsHowToAddOne()
+    public async Task ResolveAlias_WithNoAccounts_ExplainsHowToGetStarted()
     {
         var act = () => NewSubject().ResolveAliasAsync(null);
 
         (await act.Should().ThrowAsync<AccountException>())
-            .WithMessage("*add_account*");
+            .WithMessage("*setup_gmail*");
     }
 
     [Fact]
@@ -204,7 +204,7 @@ public class GmailAccountRegistryTests
     }
 
     [Fact]
-    public async Task RenameAccount_MovesStoredSecretsAndKeepsDefault()
+    public async Task RenameAccount_KeepsTheDefaultUnderTheNewAlias()
     {
         var subject = NewSubject();
         await subject.SetSharedCredentialsAsync(ClientId, Secret);
@@ -219,7 +219,7 @@ public class GmailAccountRegistryTests
     }
 
     [Fact]
-    public async Task RemoveAccount_DeletesSecrets_AndPromotesTheSurvivorToDefault()
+    public async Task RemoveAccount_PromotesTheSurvivorToDefault()
     {
         var subject = NewSubject();
         await subject.SetSharedCredentialsAsync(ClientId, Secret);
@@ -230,6 +230,21 @@ public class GmailAccountRegistryTests
 
         (await subject.ListAccountsAsync()).Should().ContainSingle().Which.Alias.Should().Be("personal");
         (await subject.ResolveAliasAsync(null)).Should().Be("personal");
+    }
+
+    [Fact]
+    public async Task RemoveAccount_DeletesTheAccountsOAuthToken()
+    {
+        var subject = NewSubject();
+        await subject.SetSharedCredentialsAsync(ClientId, Secret);
+        await subject.AddAccountAsync("personal", setDefault: true);
+        await subject.AddAccountAsync("studio", setDefault: false);
+        await _store.SaveTokenAsync(AccountKeys.OAuthToken("studio"), "TOKEN");
+
+        await subject.RemoveAccountAsync("studio", revokeRemote: false);
+
+        (await _store.ExistsAsync(AccountKeys.OAuthToken("studio"))).Should().BeFalse();
+        _store.Keys.Should().Contain(AccountKeys.SharedClientCredentials);
     }
 
     [Fact]

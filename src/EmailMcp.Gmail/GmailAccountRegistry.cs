@@ -104,8 +104,8 @@ public sealed class GmailAccountRegistry : IAccountRegistry
     public async Task<bool> AreSharedCredentialsConfiguredAsync(CancellationToken cancellationToken = default)
     {
         if (await this.tokenStore
-            .ExistsAsync(AccountKeys.SharedClientCredentials, cancellationToken)
-            .ConfigureAwait(false))
+            .LoadTokenAsync(AccountKeys.SharedClientCredentials, cancellationToken)
+            .ConfigureAwait(false) is not null)
         {
             return true;
         }
@@ -314,7 +314,7 @@ public sealed class GmailAccountRegistry : IAccountRegistry
         if (index.Accounts.Count == 0)
         {
             throw new AccountException(
-                "No accounts are configured. Use the 'add_account' tool to add one.");
+                "No accounts are configured. Use the 'setup_gmail' tool to get started.");
         }
 
         // A single account is always the default, whatever the index says. This keeps

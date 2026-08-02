@@ -124,7 +124,10 @@ public sealed class AccountIndexStore
     /// </summary>
     /// <remarks>
     /// The shared copy is written before any per-account copy is deleted, so a crash part-way
-    /// leaves the credentials readable and the next run simply repeats the promotion.
+    /// through the write leaves the per-account copies untouched, and the next run repeats the
+    /// promotion because the readability check below does not see a torn shared write as present.
+    /// A crash after the shared write completes but before all per-account copies are deleted
+    /// leaves the credentials readable under both keys.
     /// </remarks>
     private async Task MigrateCredentialsToSharedIfNeededAsync(
         AccountIndex index,
@@ -136,8 +139,8 @@ public sealed class AccountIndexStore
         }
 
         var hasShared = await this.tokenStore
-            .ExistsAsync(AccountKeys.SharedClientCredentials, cancellationToken)
-            .ConfigureAwait(false);
+            .LoadTokenAsync(AccountKeys.SharedClientCredentials, cancellationToken)
+            .ConfigureAwait(false) is not null;
 
         if (!hasShared)
         {

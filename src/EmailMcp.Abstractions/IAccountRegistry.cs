@@ -43,12 +43,13 @@ public interface IAccountRegistry
     Task AddAccountAsync(string alias, bool setDefault, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Removes an account and its stored secrets. When <paramref name="revokeRemote"/> is true,
-    /// the OAuth grant is revoked with the provider first.
+    /// Removes an account and its stored OAuth token. The shared client credentials are untouched.
+    /// When <paramref name="revokeRemote"/> is true, the OAuth grant is revoked with the provider
+    /// first.
     /// </summary>
     Task RemoveAccountAsync(string alias, bool revokeRemote, CancellationToken cancellationToken = default);
 
-    /// <summary>Renames an account, re-keying its stored secrets.</summary>
+    /// <summary>Renames an account, moving its stored OAuth token with it.</summary>
     Task RenameAccountAsync(string alias, string newAlias, CancellationToken cancellationToken = default);
 
     /// <summary>Marks an account as the default.</summary>

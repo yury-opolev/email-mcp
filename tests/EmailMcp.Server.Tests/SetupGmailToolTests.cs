@@ -65,8 +65,9 @@ public class SetupGmailToolTests
         var registry = NewRegistry(accounts, new CredentialUpdateResult(false, []));
 
         var response = await SetupGmailTool.SetupGmail(registry.Object, ClientId, Secret);
+        var doc = JsonDocument.Parse(response);
 
-        response.Should().NotContain("cannot tell which one");
+        doc.RootElement.GetProperty("Success").GetBoolean().Should().BeTrue();
     }
 
     [Fact]

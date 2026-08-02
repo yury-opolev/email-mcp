@@ -25,7 +25,7 @@ public static class ListAccountsTool
                 return ToolResponse.Json(new
                 {
                     Accounts = Array.Empty<object>(),
-                    Message = "No accounts are configured. Use 'add_account' to add one.",
+                    Message = "No accounts are configured. Use 'setup_gmail' to get started.",
                 });
             }
 

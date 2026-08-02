@@ -31,9 +31,9 @@ public static class AccountKeys
     public const string SharedClientCredentials = "shared--client-credentials";
 
     /// <summary>
-    /// Key holding client credentials for one account, before they were shared. Still written by
-    /// <c>GmailAccountRegistry</c> today; once the shared credential lands, migration will only
-    /// read and delete it.
+    /// Key holding client credentials for one account, from before credentials were shared. Never
+    /// written any more; migration only reads and deletes it while promoting the survivor to
+    /// <see cref="SharedClientCredentials"/>.
     /// </summary>
     public static string LegacyAccountClientCredentials(string alias) =>
         $"account--{alias}--client-credentials";

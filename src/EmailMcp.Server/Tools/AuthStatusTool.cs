@@ -41,7 +41,8 @@ public static class AuthStatusTool
                     Provider = authenticator.ProviderName,
                     Account = alias,
                     Status = "not_configured",
-                    Message = $"Gmail credentials are not configured for account '{alias}'. " +
+                    Message = "No shared Gmail client credentials are configured yet. They are " +
+                        "shared by every account, not specific to this one. " +
                         "Please follow these steps to set up Gmail API access:",
                     SetupInstructions = new[]
                     {

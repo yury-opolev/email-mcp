@@ -56,7 +56,8 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
     }
 
     /// <summary>
-    /// Returns true if client credentials (Client ID + Secret) have been configured for this account.
+    /// Returns true if the shared client credentials (Client ID + Secret) have been configured.
+    /// They are shared by every account, not scoped to this one.
     /// </summary>
     public async Task<bool> AreCredentialsConfiguredAsync(CancellationToken cancellationToken = default)
     {
@@ -202,7 +203,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         if (storedCredentials is not null)
         {
             this.logger.LogDebug(
-                "Loading Gmail credentials for account '{Alias}' from encrypted store",
+                "Loading shared Gmail client credentials from encrypted store, for account '{Alias}'",
                 this.accountAlias);
             var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(storedCredentials));
             var secrets = await GoogleClientSecrets.FromStreamAsync(stream, cancellationToken).ConfigureAwait(false);
@@ -214,7 +215,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         if (!File.Exists(credentialsPath))
         {
             throw new FileNotFoundException(
-                $"Gmail credentials are not configured for account '{this.accountAlias}'. " +
+                "Gmail credentials are not configured. " +
                 "Run 'setup_gmail' with a Google OAuth Client ID and Client Secret, " +
                 "or place a credentials.json file at: " + credentialsPath);
         }
