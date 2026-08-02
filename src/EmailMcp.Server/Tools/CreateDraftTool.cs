@@ -1,24 +1,23 @@
 using System.ComponentModel;
-using System.Text.Json;
 using EmailMcp.Abstractions;
 using ModelContextProtocol.Server;
 
 namespace EmailMcp.Server.Tools;
 
 [McpServerToolType]
-public static class SendEmailTool
+public static class CreateDraftTool
 {
-    [McpServerTool(Name = "send_email"), Description(
-        "Sends an email from the authenticated account. " +
-        "Requires the GmailSend OAuth scope. If you previously authenticated with read-only " +
-        "access, you must run 'revoke_auth' and then 'auth_status' to re-grant consent with " +
-        "the broader scope before send_email will work. " +
-        "Recipient fields accept a comma-separated list. Display names are supported using the " +
-        "form 'Display Name <addr@example.com>'. Provide either body, bodyHtml, or both — " +
-        "supplying both produces a multipart/alternative message. " +
+    [McpServerTool(Name = "create_draft"), Description(
+        "Saves an email as a draft in the account's mailbox without sending it, so it can be " +
+        "reviewed and sent by hand from the mail client. " +
+        "Requires the GmailCompose OAuth scope. If the stored sign-in predates draft support, " +
+        "run 'revoke_auth' then 'auth_status' for the account to re-grant consent. " +
+        "Takes the same arguments as 'send_email': recipient fields accept a comma-separated " +
+        "list, display names are supported using the form 'Display Name <addr@example.com>', " +
+        "and supplying both body and bodyHtml produces a multipart/alternative message. " +
         "Attachments are given as local file paths on the machine running this server; " +
         "the total must stay under Gmail's 25 MB limit.")]
-    public static async Task<string> SendEmail(
+    public static async Task<string> CreateDraft(
         IAccountRegistry accounts,
         [Description("Comma-separated list of recipient email addresses (e.g. 'alice@example.com, Bob <bob@example.com>').")] string to,
         [Description("Email subject line.")] string subject,
@@ -32,23 +31,23 @@ public static class SendEmailTool
     {
         if (string.IsNullOrWhiteSpace(to))
         {
-            return Error("The 'to' field is required.");
+            return ToolResponse.Error("The 'to' field is required.");
         }
 
         if (string.IsNullOrWhiteSpace(subject))
         {
-            return Error("The 'subject' field is required.");
+            return ToolResponse.Error("The 'subject' field is required.");
         }
 
         if (string.IsNullOrWhiteSpace(body) && string.IsNullOrWhiteSpace(bodyHtml))
         {
-            return Error("At least one of 'body' or 'bodyHtml' must be supplied.");
+            return ToolResponse.Error("At least one of 'body' or 'bodyHtml' must be supplied.");
         }
 
         var loaded = AttachmentLoader.Load(attachments);
         if (loaded.Error is not null)
         {
-            return Error(loaded.Error);
+            return ToolResponse.Error(loaded.Error);
         }
 
         var request = new SendEmailRequest
@@ -64,7 +63,7 @@ public static class SendEmailTool
 
         if (request.To.Count == 0)
         {
-            return Error("Could not parse any valid recipient addresses from 'to'.");
+            return ToolResponse.Error("Could not parse any valid recipient addresses from 'to'.");
         }
 
         string alias;
@@ -76,18 +75,18 @@ public static class SendEmailTool
         }
         catch (AccountException ex)
         {
-            return Error(ex.Message);
+            return ToolResponse.Error(ex.Message);
         }
 
         try
         {
-            var messageId = await emailProvider.SendEmailAsync(request, cancellationToken);
+            var draftId = await emailProvider.CreateDraftAsync(request, cancellationToken);
 
-            return Json(new
+            return ToolResponse.Json(new
             {
                 Success = true,
                 Account = alias,
-                MessageId = messageId,
+                DraftId = draftId,
                 To = request.To.Select(a => a.ToString()),
                 Cc = request.Cc.Select(a => a.ToString()),
                 Bcc = request.Bcc.Select(a => a.ToString()),
@@ -97,22 +96,16 @@ public static class SendEmailTool
         }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            return Error(
-                $"Gmail rejected the send request for account '{alias}' with HTTP 403. The most " +
+            return ToolResponse.Error(
+                $"Gmail rejected the draft request for account '{alias}' with HTTP 403. The most " +
                 "common cause is insufficient OAuth scope: the stored token was granted before " +
-                $"send capability was added. Run 'revoke_auth' then 'auth_status' for account " +
+                $"draft capability was added. Run 'revoke_auth' then 'auth_status' for account " +
                 $"'{alias}' to re-authenticate with the broader scope. " +
                 "Underlying error: " + ex.Message);
         }
         catch (Exception ex)
         {
-            return Error("Failed to send email: " + ex.Message);
+            return ToolResponse.Error("Failed to create draft: " + ex.Message);
         }
     }
-
-    private static string Error(string message) =>
-        Json(new { Success = false, Error = message });
-
-    private static string Json(object value) =>
-        JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
 }

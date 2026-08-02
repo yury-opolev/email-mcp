@@ -45,4 +45,13 @@ public interface IEmailProvider
     Task<string> SendEmailAsync(
         SendEmailRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves an email as a draft without sending it. Returns the provider-assigned draft ID.
+    /// Takes the same request shape as <see cref="SendEmailAsync"/>, so a draft that is later
+    /// sent from the mail client's own UI is the same message that would have been sent here.
+    /// </summary>
+    Task<string> CreateDraftAsync(
+        SendEmailRequest request,
+        CancellationToken cancellationToken = default);
 }

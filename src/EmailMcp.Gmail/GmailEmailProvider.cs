@@ -142,6 +142,33 @@ public sealed class GmailEmailProvider : IEmailProvider
         return sent.Id;
     }
 
+    public async Task<string> CreateDraftAsync(
+        SendEmailRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var service = await GetServiceAsync(cancellationToken);
+
+        var mime = MimeBuilder.Build(request);
+        var raw = Base64UrlEncode(mime);
+
+        var draft = new Google.Apis.Gmail.v1.Data.Draft
+        {
+            Message = new Google.Apis.Gmail.v1.Data.Message { Raw = raw },
+        };
+        var created = await service.Users.Drafts.Create(draft, "me").ExecuteAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Created draft; draftId={DraftId}, to={ToCount}, cc={CcCount}, bcc={BccCount}",
+            created.Id,
+            request.To.Count,
+            request.Cc.Count,
+            request.Bcc.Count);
+
+        return created.Id;
+    }
+
     private static string Base64UrlEncode(string mime)
     {
         var bytes = Encoding.UTF8.GetBytes(mime);

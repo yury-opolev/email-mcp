@@ -14,9 +14,11 @@ public sealed class GmailOptions
     public string? CredentialsPath { get; set; }
 
     /// <summary>
-    /// OAuth scopes to request. Defaults to read + send access.
+    /// OAuth scopes to request. Defaults to read + send + compose access.
+    /// GmailCompose is what permits creating drafts; GmailSend alone does not.
     /// </summary>
-    public string[] Scopes { get; set; } = [GmailService.Scope.GmailReadonly, GmailService.Scope.GmailSend];
+    public string[] Scopes { get; set; } =
+        [GmailService.Scope.GmailReadonly, GmailService.Scope.GmailSend, GmailService.Scope.GmailCompose];
 
     /// <summary>
     /// Application name sent to Google API.

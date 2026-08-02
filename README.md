@@ -26,6 +26,7 @@ Omit it to use the default. See [Multiple accounts](#multiple-accounts).
 | `search_emails` | Searches emails using Gmail search syntax (e.g., `from:john subject:meeting after:2025/01/01`). Supports individual field filters: from, to, subject, date range, and label |
 | `list_labels` | Lists all email labels/folders available in the account. Returns label IDs and names |
 | `send_email` | Sends an email from the authenticated account. Supports plain text, HTML, or both (multipart/alternative), plus file attachments. Accepts comma-separated `to`/`cc`/`bcc` lists, with optional display names (`"Name <addr@example.com>"`). Requires the GmailSend OAuth scope, see Scopes section below |
+| `create_draft` | Saves an email as a draft in the mailbox without sending it, so it can be reviewed and sent by hand from the mail client. Same arguments as `send_email`. Requires the GmailCompose OAuth scope |
 | `revoke_auth` | Fully revokes the OAuth token with Google and deletes locally stored tokens for one account. Does not remove stored client credentials |
 
 ### Account management
@@ -95,12 +96,13 @@ practical ceiling is lower. For anything larger, share a link instead.
 
 ## Scopes
 
-The server requests two Gmail OAuth scopes:
+The server requests three Gmail OAuth scopes:
 
 - `gmail.readonly` — required by `list_emails`, `read_email`, `search_emails`, `list_labels`
 - `gmail.send` — required by `send_email`
+- `gmail.compose` — required by `create_draft`. `gmail.send` permits sending but **not** saving a draft, so drafts need their own scope
 
-If you previously authenticated against an older build that only requested `gmail.readonly`, you must run `revoke_auth` and then `auth_status` to re-grant consent with the broader scope before `send_email` will succeed.
+Scopes are granted at sign-in, and a stored token is never upgraded in place. If you authenticated against an older build that requested fewer scopes, run `revoke_auth` and then `auth_status` for that account to re-grant consent before the newer tools will succeed. Both tools report an HTTP 403 with this instruction if you hit it.
 
 ## Quick Start
 
