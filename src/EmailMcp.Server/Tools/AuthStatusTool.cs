@@ -58,8 +58,8 @@ public static class AuthStatusTool
                         "11. Choose 'Desktop app' as application type, give it a name, click 'Create'",
                         "12. Copy the 'Client ID' and 'Client Secret' shown in the popup",
                     },
-                    NextStep = "Once you have the Client ID and Client Secret, use the 'add_account' tool " +
-                        "(or 'setup_gmail' for a single-account setup) to provide them.",
+                    NextStep = "Once you have the Client ID and Client Secret, use the 'setup_gmail' tool " +
+                        "to provide them.",
                 });
             }
         }
@@ -80,8 +80,7 @@ public static class AuthStatusTool
                 Message = reauthed
                     ? $"Successfully re-authenticated account '{alias}'. You can now use email tools."
                     : "Re-authentication failed. Your credentials are still configured. " +
-                      "Run 'auth_status' again to retry, or reconfigure the credentials with " +
-                      "'setup_gmail' (single-account setups) or 'update_account_credentials'.",
+                      "Run 'auth_status' again to retry, or reconfigure them with 'setup_gmail'.",
             });
         }
 
