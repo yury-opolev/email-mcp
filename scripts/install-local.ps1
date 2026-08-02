@@ -114,7 +114,20 @@ if (-not (Test-Path $target)) {
 
 $sweptCount = 0
 $stillLockedCount = 0
+$newestDisplacement = $null
 foreach ($stale in @(Get-ChildItem $target -Recurse -File -Filter '*.locked-*' -ErrorAction SilentlyContinue)) {
+    # The suffix encodes when that displacement happened, which is the one honest record of
+    # the last install time when no stamp file exists yet. Read it BEFORE the sweep, because
+    # a successful sweep destroys the evidence.
+    if ($stale.Name -match '\.locked-(\d{8}-\d{6})$') {
+        $parsed = [datetime]::MinValue
+        if ([datetime]::TryParseExact($Matches[1], 'yyyyMMdd-HHmmss', $null, 'None', [ref] $parsed)) {
+            if ($null -eq $newestDisplacement -or $parsed -gt $newestDisplacement) {
+                $newestDisplacement = $parsed
+            }
+        }
+    }
+
     if ($DryRun) {
         Write-Host "[dry run] would try to delete leftover $($stale.Name)"
         continue
@@ -200,13 +213,23 @@ if (Test-Path $stampPath) {
         $installedAt = $null
     }
 }
+if ($null -eq $installedAt -and $null -ne $newestDisplacement) {
+    # No stamp, but files were displaced by an earlier run and the suffix records when.
+    $installedAt = $newestDisplacement
+}
 if ($null -eq $installedAt) {
-    # No stamp: this install predates the stamp file, or it was removed. Fall back to the
-    # server assembly's own mtime, which is a lower bound on when it was installed.
+    # Last resort: the server assembly's own mtime. This is WEAK - Copy-Item preserves the
+    # source timestamps, so it dates the build rather than the install, and a process that
+    # started between those two moments is stale but will not look it.
     $installedExe = Join-Path $target 'EmailMcp.Server.exe'
     if (Test-Path $installedExe) {
         $installedAt = (Get-Item $installedExe).LastWriteTime
     }
+}
+
+# Seed the stamp from whatever evidence was used, so later runs do not have to guess again.
+if ($null -ne $installedAt -and -not (Test-Path $stampPath) -and -not $DryRun) {
+    Set-Content -Path $stampPath -Value $installedAt.ToString('o') -Encoding utf8
 }
 
 $staleProcesses = @()
