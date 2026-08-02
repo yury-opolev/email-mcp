@@ -116,7 +116,7 @@ public sealed class GmailAccountRegistry : IAccountRegistry
 
         await this.tokenStore.DeleteTokenAsync(AccountKeys.OAuthToken(normalized), cancellationToken)
             .ConfigureAwait(false);
-        await this.tokenStore.DeleteTokenAsync(AccountKeys.ClientCredentials(normalized), cancellationToken)
+        await this.tokenStore.DeleteTokenAsync(AccountKeys.LegacyAccountClientCredentials(normalized), cancellationToken)
             .ConfigureAwait(false);
 
         index.Accounts.Remove(account);
@@ -149,8 +149,8 @@ public sealed class GmailAccountRegistry : IAccountRegistry
         }
 
         await this.MoveTokenAsync(
-            AccountKeys.ClientCredentials(from),
-            AccountKeys.ClientCredentials(to),
+            AccountKeys.LegacyAccountClientCredentials(from),
+            AccountKeys.LegacyAccountClientCredentials(to),
             cancellationToken).ConfigureAwait(false);
 
         await this.MoveTokenAsync(
@@ -345,7 +345,7 @@ public sealed class GmailAccountRegistry : IAccountRegistry
 
         var json = JsonSerializer.Serialize(credentials);
         await this.tokenStore
-            .SaveTokenAsync(AccountKeys.ClientCredentials(alias), json, cancellationToken)
+            .SaveTokenAsync(AccountKeys.LegacyAccountClientCredentials(alias), json, cancellationToken)
             .ConfigureAwait(false);
     }
 

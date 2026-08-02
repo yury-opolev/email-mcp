@@ -18,7 +18,8 @@ public class AccountKeysTests
         var keys = new[]
         {
             AccountKeys.Index,
-            AccountKeys.ClientCredentials("studio"),
+            AccountKeys.SharedClientCredentials,
+            AccountKeys.LegacyAccountClientCredentials("studio"),
             AccountKeys.OAuthToken("studio"),
             AccountKeys.OAuthTokenPrefix("studio"),
         };
@@ -27,6 +28,15 @@ public class AccountKeysTests
         {
             AsFilename(key).Should().Be(key, "keys must survive filename sanitisation unchanged");
         }
+    }
+
+    [Fact]
+    public void SharedClientCredentialsKey_DoesNotCollideWithAnyAccountKey()
+    {
+        AccountKeys.SharedClientCredentials
+            .Should().NotBe(AccountKeys.OAuthToken("shared"))
+            .And.NotBe(AccountKeys.LegacyAccountClientCredentials("shared"))
+            .And.NotBe(AccountKeys.Index);
     }
 
     [Fact]
@@ -41,7 +51,7 @@ public class AccountKeysTests
     [Fact]
     public void ClientCredentialsAndToken_DoNotCollideForTheSameAlias()
     {
-        AccountKeys.ClientCredentials("studio")
+        AccountKeys.LegacyAccountClientCredentials("studio")
             .Should().NotBe(AccountKeys.OAuthToken("studio"));
     }
 

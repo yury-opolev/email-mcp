@@ -42,7 +42,7 @@ public sealed class GmailAuthenticator : IEmailAuthenticator
         this.logger = logger;
         this.accountAlias = accountAlias;
         this.oauthTokenKey = AccountKeys.OAuthToken(accountAlias);
-        this.clientCredentialsKey = AccountKeys.ClientCredentials(accountAlias);
+        this.clientCredentialsKey = AccountKeys.LegacyAccountClientCredentials(accountAlias);
     }
 
     public async Task<bool> IsAuthenticatedAsync(CancellationToken cancellationToken = default)

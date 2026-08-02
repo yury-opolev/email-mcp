@@ -80,7 +80,7 @@ public sealed class AccountIndexStore
             AccountKeys.LegacyAlias);
 
         await this.tokenStore.SaveTokenAsync(
-            AccountKeys.ClientCredentials(AccountKeys.LegacyAlias),
+            AccountKeys.LegacyAccountClientCredentials(AccountKeys.LegacyAlias),
             legacyCredentials,
             cancellationToken).ConfigureAwait(false);
 

@@ -112,7 +112,7 @@ public class GmailAccountRegistryTests
     {
         await NewSubject().AddAccountAsync("studio", ClientId, Secret, setDefault: false);
 
-        _store.Keys.Should().Contain(AccountKeys.ClientCredentials("studio"));
+        _store.Keys.Should().Contain(AccountKeys.LegacyAccountClientCredentials("studio"));
     }
 
     [Fact]
@@ -124,8 +124,8 @@ public class GmailAccountRegistryTests
 
         await subject.RenameAccountAsync("studio", "work");
 
-        _store.Keys.Should().NotContain(AccountKeys.ClientCredentials("studio"));
-        _store.Keys.Should().Contain(AccountKeys.ClientCredentials("work"));
+        _store.Keys.Should().NotContain(AccountKeys.LegacyAccountClientCredentials("studio"));
+        _store.Keys.Should().Contain(AccountKeys.LegacyAccountClientCredentials("work"));
         (await _store.LoadTokenAsync(AccountKeys.OAuthToken("work"))).Should().Be("token-data");
         (await subject.ResolveAliasAsync(null)).Should().Be("work");
     }
@@ -139,7 +139,7 @@ public class GmailAccountRegistryTests
 
         await subject.RemoveAccountAsync("studio", revokeRemote: false);
 
-        _store.Keys.Should().NotContain(AccountKeys.ClientCredentials("studio"));
+        _store.Keys.Should().NotContain(AccountKeys.LegacyAccountClientCredentials("studio"));
         (await subject.ListAccountsAsync()).Should().ContainSingle().Which.Alias.Should().Be("personal");
         (await subject.ResolveAliasAsync(null)).Should().Be("personal");
     }

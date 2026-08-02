@@ -24,8 +24,18 @@ public static class AccountKeys
     /// <summary>Alias assigned to a migrated legacy account.</summary>
     public const string LegacyAlias = "default";
 
-    /// <summary>Key holding the client ID and secret for one account.</summary>
-    public static string ClientCredentials(string alias) => $"account--{alias}--client-credentials";
+    /// <summary>
+    /// Key holding the one Client ID and Secret shared by every account. A Google OAuth client
+    /// identifies the application, not the user, so one client authorises any number of accounts.
+    /// </summary>
+    public const string SharedClientCredentials = "shared--client-credentials";
+
+    /// <summary>
+    /// Key that held client credentials for one account, before they were shared. Read and
+    /// deleted by migration; never written.
+    /// </summary>
+    public static string LegacyAccountClientCredentials(string alias) =>
+        $"account--{alias}--client-credentials";
 
     /// <summary>
     /// Key holding the OAuth token for one account. The "user" suffix matches the user id passed

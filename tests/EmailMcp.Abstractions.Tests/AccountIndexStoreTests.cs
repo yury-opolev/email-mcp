@@ -57,7 +57,7 @@ public class AccountIndexStoreTests
         index.Accounts.Should().ContainSingle().Which.Alias.Should().Be(AccountKeys.LegacyAlias);
         index.DefaultAlias.Should().Be(AccountKeys.LegacyAlias);
 
-        (await _store.LoadTokenAsync(AccountKeys.ClientCredentials(AccountKeys.LegacyAlias)))
+        (await _store.LoadTokenAsync(AccountKeys.LegacyAccountClientCredentials(AccountKeys.LegacyAlias)))
             .Should().Be("{\"installed\":{}}");
         (await _store.LoadTokenAsync(AccountKeys.OAuthToken(AccountKeys.LegacyAlias)))
             .Should().Be("{\"access_token\":\"abc\"}", "the existing session must survive the upgrade");
