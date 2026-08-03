@@ -26,4 +26,20 @@ public sealed class SendEmailRequest
     /// as the first part.
     /// </summary>
     public IReadOnlyList<OutboundAttachment> Attachments { get; init; } = [];
+
+    /// <summary>
+    /// RFC 5322 <c>In-Reply-To</c>: the <c>Message-ID</c> of the message being replied to,
+    /// angle brackets included. Set this and <see cref="References"/> together — a reply
+    /// carrying only a <c>Re:</c> subject threads in Gmail (which infers threads from
+    /// subject and participants) but appears as an unrelated message in clients that
+    /// thread strictly on headers, which is most of them.
+    /// </summary>
+    public string? InReplyTo { get; init; }
+
+    /// <summary>
+    /// RFC 5322 <c>References</c>: the ancestor <c>Message-ID</c> chain, space separated,
+    /// ending with the parent. Built by appending the parent's Message-ID to whatever
+    /// <c>References</c> the parent carried.
+    /// </summary>
+    public string? References { get; init; }
 }

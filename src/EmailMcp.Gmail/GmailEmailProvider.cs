@@ -142,6 +142,143 @@ public sealed class GmailEmailProvider : IEmailProvider
         return sent.Id;
     }
 
+    public async Task<string> ReplyToEmailAsync(
+        ReplyToEmailRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.MessageId);
+
+        if (string.IsNullOrWhiteSpace(request.Body) && string.IsNullOrWhiteSpace(request.BodyHtml))
+        {
+            throw new ArgumentException(
+                "ReplyToEmailRequest must include Body and/or BodyHtml.", nameof(request));
+        }
+
+        var service = await GetServiceAsync(cancellationToken);
+
+        var originalRaw = await service.Users.Messages
+            .Get("me", request.MessageId)
+            .ExecuteAsync(cancellationToken);
+        var original = GmailMapper.ToEmailMessage(originalRaw);
+
+        if (original.From is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot reply to message '{request.MessageId}': it has no From header, so there is " +
+                "nobody to reply to.");
+        }
+
+        var cc = await BuildReplyCcAsync(request, original, cancellationToken);
+
+        var reply = new SendEmailRequest
+        {
+            To = [original.From],
+            Cc = cc,
+            Subject = MailSubject.EnsureReplyPrefix(original.Subject),
+            Body = request.Body,
+            BodyHtml = request.BodyHtml,
+            Attachments = request.Attachments,
+            InReplyTo = original.MessageIdHeader,
+            References = BuildReferences(original),
+        };
+
+        if (original.MessageIdHeader is null)
+        {
+            // Rare, and worth knowing about: without a Message-ID there is nothing to thread
+            // against, so this degrades to a plain message carrying a "Re:" subject.
+            _logger.LogWarning(
+                "Replying to message {MessageId} which has no Message-ID header; the reply cannot " +
+                "carry threading headers and will not thread outside Gmail.",
+                request.MessageId);
+        }
+
+        var mime = MimeBuilder.Build(reply);
+        var message = new Google.Apis.Gmail.v1.Data.Message
+        {
+            Raw = Base64UrlEncode(mime),
+            // Gmail files the sent message into the same conversation server-side. The MIME
+            // headers above are what make it thread for the *recipient*; this is what makes it
+            // thread in the sender's own mailbox.
+            ThreadId = original.ThreadId,
+        };
+
+        var sent = await service.Users.Messages.Send(message, "me").ExecuteAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Sent reply; messageId={MessageId}, inReplyTo={InReplyTo}, threadId={ThreadId}, cc={CcCount}",
+            sent.Id,
+            original.MessageIdHeader,
+            original.ThreadId,
+            cc.Count);
+
+        return sent.Id;
+    }
+
+    /// <summary>
+    /// The <c>References</c> chain for a reply: the parent's own chain with the parent's
+    /// Message-ID appended. A first reply has no parent chain and so is just the parent's ID.
+    /// </summary>
+    private static string? BuildReferences(EmailMessage original)
+    {
+        if (original.MessageIdHeader is null)
+        {
+            return original.References;
+        }
+
+        return string.IsNullOrWhiteSpace(original.References)
+            ? original.MessageIdHeader
+            : original.References.Trim() + " " + original.MessageIdHeader;
+    }
+
+    /// <summary>
+    /// Cc for a reply: the caller's explicit additions, plus — only when ReplyAll is set — the
+    /// original's To and Cc with this account's own address removed, so replying all does not
+    /// mail yourself. De-duplicated case-insensitively.
+    /// </summary>
+    private async Task<IReadOnlyList<EmailAddress>> BuildReplyCcAsync(
+        ReplyToEmailRequest request,
+        EmailMessage original,
+        CancellationToken cancellationToken)
+    {
+        var result = new List<EmailAddress>(request.Cc);
+
+        if (request.ReplyAll)
+        {
+            var service = await GetServiceAsync(cancellationToken);
+            var profile = await service.Users.GetProfile("me").ExecuteAsync(cancellationToken);
+            var self = profile.EmailAddress;
+
+            foreach (var candidate in original.To.Concat(original.Cc))
+            {
+                if (!string.IsNullOrWhiteSpace(self)
+                    && string.Equals(candidate.Address, self, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                result.Add(candidate);
+            }
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // The reply already goes To the original sender; repeating them in Cc is noise.
+            original.From!.Address,
+        };
+
+        var deduped = new List<EmailAddress>();
+        foreach (var address in result)
+        {
+            if (seen.Add(address.Address))
+            {
+                deduped.Add(address);
+            }
+        }
+
+        return deduped;
+    }
+
     public async Task<string> CreateDraftAsync(
         SendEmailRequest request,
         CancellationToken cancellationToken = default)

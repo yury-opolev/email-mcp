@@ -26,6 +26,7 @@ Omit it to use the default. See [Multiple accounts](#multiple-accounts).
 | `search_emails` | Searches emails using Gmail search syntax (e.g., `from:john subject:meeting after:2025/01/01`). Supports individual field filters: from, to, subject, date range, and label |
 | `list_labels` | Lists all email labels/folders available in the account. Returns label IDs and names |
 | `send_email` | Sends an email from the authenticated account. Supports plain text, HTML, or both (multipart/alternative), plus file attachments. Accepts comma-separated `to`/`cc`/`bcc` lists, with optional display names (`"Name <addr@example.com>"`). Requires the GmailSend OAuth scope, see Scopes section below |
+| `reply_to_email` | Replies to an existing message, **properly threaded**. Takes a message ID and a body; the recipient, subject and `In-Reply-To`/`References` headers are derived from the original. Use this rather than `send_email` with a `Re:` subject — see [Replying](#replying) |
 | `create_draft` | Saves an email as a draft in the mailbox without sending it, so it can be reviewed and sent by hand from the mail client. Same arguments as `send_email`. Requires the GmailCompose OAuth scope |
 | `revoke_auth` | Fully revokes the OAuth token with Google and deletes locally stored tokens for one account. Does not remove stored client credentials |
 
@@ -93,6 +94,30 @@ The MIME type is inferred from the file extension, falling back to
 checked up front and the tool returns a clear error rather than letting the API fail
 after the upload. Note this checks the raw bytes; base64 adds roughly 33%, so the
 practical ceiling is lower. For anything larger, share a link instead.
+
+## Replying
+
+Use `reply_to_email`, not `send_email` with a hand-typed `Re:` subject.
+
+The difference is invisible in Gmail and obvious everywhere else. Gmail infers conversations from
+subject and participants, so a new message titled `Re: …` appears to thread correctly when you
+check your own sent folder. Almost every other client — Outlook, Thunderbird, Apple Mail — threads
+strictly on the `In-Reply-To` and `References` headers, and shows a subject-only "reply" as an
+unrelated message dropped into the inbox.
+
+`reply_to_email` takes the message ID and a body. Everything else is derived from the original:
+
+- **Recipient** — the original sender. `replyAll` additionally Ccs the original's To and Cc,
+  minus your own address. It is off by default, because reply-all is the more damaging mistake.
+- **Subject** — the original's, prefixed `Re: ` unless it already carries a reply prefix.
+  Non-English prefixes (`AW:`, `SV:`, `Rif:`, `Res:` …) are recognised, so replies to German or
+  Italian correspondents do not come back as `Re: AW: …`.
+- **Threading** — `In-Reply-To` is the original's `Message-ID`; `References` is the original's
+  chain with that ID appended. Gmail's `threadId` is set too, so the sent copy files into the
+  same conversation in your own mailbox.
+
+The original's attachments are **not** carried over — that is forwarding, not replying.
+Forwarding is not implemented yet.
 
 ## Scopes
 

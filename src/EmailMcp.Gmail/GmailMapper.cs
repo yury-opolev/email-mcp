@@ -18,6 +18,8 @@ public static class GmailMapper
         {
             Id = gmailMessage.Id,
             ThreadId = gmailMessage.ThreadId,
+            MessageIdHeader = GetHeader(headers, "Message-ID"),
+            References = GetHeader(headers, "References"),
             Subject = GetHeader(headers, "Subject"),
             From = ParseEmailAddress(GetHeader(headers, "From")),
             To = ParseEmailAddresses(GetHeader(headers, "To")),

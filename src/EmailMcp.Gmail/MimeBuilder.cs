@@ -35,6 +35,21 @@ internal static class MimeBuilder
         // it in the raw message — Google strips it from the delivered headers.
         AppendAddressHeader(sb, "Bcc", request.Bcc);
         sb.Append("Subject: ").Append(EncodeHeaderValue(request.Subject)).Append(Crlf);
+
+        // Threading headers. These are what make a reply attach to its conversation in
+        // clients that thread properly; Gmail alone would guess from subject + participants,
+        // but nothing else does. Message-IDs are already ASCII and angle-bracketed, so they
+        // are written verbatim rather than run through EncodeHeaderValue.
+        if (!string.IsNullOrWhiteSpace(request.InReplyTo))
+        {
+            sb.Append("In-Reply-To: ").Append(request.InReplyTo.Trim()).Append(Crlf);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.References))
+        {
+            sb.Append("References: ").Append(request.References.Trim()).Append(Crlf);
+        }
+
         sb.Append("MIME-Version: 1.0").Append(Crlf);
 
         if (request.Attachments.Count > 0)
